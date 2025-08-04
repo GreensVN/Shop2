@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Shop Grow A Garden</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #1f2937;
+            --light-color: #f9fafb;
+            --gray-color: #6b7280;
+            --border-color: #e5e7eb;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --font-main: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --border-radius: 12px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--light-color);
+            color: var(--secondary-color);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* --- Sidebar --- */
+        .admin-sidebar {
+            width: 260px;
+            background: var(--secondary-color);
+            color: #e5e7eb;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            transition: transform var(--transition);
+        }
+        .sidebar-header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #374151;
+        }
+        .sidebar-header .logo { height: 50px; margin-bottom: 10px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+        .sidebar-header h3 { color: white; font-weight: 600; }
+
+        .admin-nav .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 0.875rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, transform 0.2s;
+            font-weight: 500;
+        }
+        .admin-nav .nav-item:hover { background: #374151; color: white; transform: translateX(5px); }
+        .admin-nav .nav-item.active { background: var(--primary-color); color: white; font-weight: 600; }
+        .admin-nav .nav-item i { margin-right: 1rem; width: 20px; text-align: center; font-size: 1.1rem; }
+
+        .sidebar-footer {
+            margin-top: auto;
+            text-align: center;
+            padding-top: 1.5rem;
+            border-top: 1px solid #374151;
+        }
+        .sidebar-footer a { color: var(--gray-color); font-size: 0.9rem; text-decoration: none; transition: color 0.2s; }
+        .sidebar-footer a:hover { color: white; }
+
+        /* --- Main Content --- */
+        .admin-main {
+            margin-left: 260px;
+            width: calc(100% - 260px);
+            padding: 2rem;
+            transition: margin-left var(--transition);
+        }
+        .admin-main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .admin-main-header h1 { font-size: 2.25rem; margin: 0; font-weight: 700; }
+
+        .content-section { display: none; }
+        .content-section.active { display: block; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- Stat Cards --- */
+        .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .card { background: white; padding: 1.5rem; border-radius: var(--border-radius); box-shadow: var(--shadow-md); transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-5px); box-shadow: var(--shadow-lg); }
+        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+        .card-header h3 { margin: 0; color: var(--gray-color); font-size: 1rem; font-weight: 600; }
+        .card-icon { font-size: 1.5rem; color: var(--primary-color); background: #eef2ff; padding: 0.75rem; border-radius: 50%; }
+        .card .value { font-size: 2.25rem; font-weight: 700; }
+        .card .sub-value { font-size: 0.9rem; color: var(--gray-color); margin-top: 5px; }
+
+        /* --- Charts & Tables --- */
+        .chart-container { background: white; padding: 2rem; border-radius: var(--border-radius); box-shadow: var(--shadow-md); text-align: center; color: var(--gray-color); }
+        
+        .table-container { background: white; border-radius: var(--border-radius); box-shadow: var(--shadow-md); overflow: hidden; }
+        .table-header { padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
+        .table-header input { padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; width: 300px; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 1rem 1.5rem; text-align: left; border-bottom: 1px solid var(--border-color); }
+        thead { background: var(--light-color); }
+        thead th { font-weight: 600; color: var(--gray-color); }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: #f9fafb; }
+        .product-image-thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; }
+        
+        .actions button { background: none; border: none; cursor: pointer; padding: 5px; font-size: 1rem; margin: 0 5px; transition: color 0.2s, transform 0.2s; }
+        .actions button:hover { transform: scale(1.2); }
+        .btn-edit { color: var(--primary-color); }
+        .btn-delete { color: var(--danger-color); }
+        .btn-promote { color: var(--success-color); }
+        .btn-ban { color: var(--warning-color); }
+        
+        .loading-state, .empty-state { text-align: center; padding: 3rem; color: var(--gray-color); }
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid var(--border-color); border-top-color: var(--primary-color);
+            border-radius: 50%; animation: spin 1s linear infinite; margin: auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- Generic Button --- */
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 600; text-decoration: none; cursor: pointer; font-size: 14px; background-color: var(--primary-color); color: white; transition: background-color 0.2s, transform 0.2s; }
+        .btn:hover { background-color: #4338ca; transform: translateY(-2px); }
+        .btn i { font-size: 1rem; }
+
+        /* --- Modal --- */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(17, 24, 39, 0.6); backdrop-filter: blur(4px);
+            z-index: 100; justify-content: center; align-items: center; animation: fadeIn 0.3s;
+        }
+        .modal-content {
+            background: white; padding: 2.5rem; border-radius: var(--border-radius); width: 95%; max-width: 800px;
+            max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg);
+            transform: scale(0.95); animation: zoomIn 0.3s forwards;
+        }
+        @keyframes zoomIn { to { opacity: 1; transform: scale(1); } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); }
+        .modal-header h2 { margin: 0; font-size: 1.5rem; }
+        .close-button { background: none; border: none; font-size: 1.75rem; cursor: pointer; color: var(--gray-color); transition: color 0.2s, transform 0.2s; }
+        .close-button:hover { color: var(--secondary-color); transform: rotate(90deg); }
+
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group.full-width { grid-column: 1 / -1; }
+        .form-group label { margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
+        .form-group input, .form-group textarea, .form-group select {
+            padding: 0.875rem 1rem; border: 1px solid var(--border-color); border-radius: 8px;
+            font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; background-color: var(--light-color);
+        }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none; border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+        .form-group textarea { min-height: 120px; resize: vertical; }
+
+        .image-preview { display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; background-color: var(--light-color); padding: 1rem; border-radius: 8px; }
+        .image-preview img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 2px solid var(--border-color); }
+        .modal-footer { margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem; }
+        
+        /* --- Responsive --- */
+        @media (max-width: 768px) {
+            .admin-sidebar { transform: translateX(-100%); z-index: 200; }
+            .admin-main { margin-left: 0; width: 100%; }
+            .admin-main-header h1 { font-size: 1.75rem; }
+            .table-header { flex-direction: column; gap: 1rem; align-items: stretch; }
+            .table-header input { width: 100%; }
+            
+            /* Add hamburger menu icon if needed */
+            /* .menu-toggle { display: block; position: fixed; ... } */
+        }
+    </style>
+</head>
+<body>
+    <aside class="admin-sidebar">
+        <div class="sidebar-header">
+            <img src="https://i.ibb.co/q3r1hTft/8574d186247eba75669b7d50d42bd650-png.png" alt="Logo" class="logo">
+            <h3>Admin Panel</h3>
+        </div>
+        <nav class="admin-nav">
+            <div class="nav-item active" data-tab="dashboard-tab"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></div>
+            <div class="nav-item" data-tab="products-tab"><i class="fas fa-box-open"></i><span>Sản phẩm</span></div>
+            <div class="nav-item" data-tab="users-tab"><i class="fas fa-users"></i><span>Người dùng</span></div>
+            <div class="nav-item" data-tab="broadcast-tab"><i class="fas fa-bullhorn"></i><span>Thông báo</span></div>
+        </nav>
+        <div class="sidebar-footer">
+            <p>Xin chào, <strong id="adminName">Admin</strong></p>
+            <a href="#" id="adminLogout">Đăng xuất <i class="fas fa-sign-out-alt"></i></a>
+        </div>
+    </aside>
+
+    <main class="admin-main">
+        <!-- Dashboard Section -->
+        <section id="dashboard-tab" class="content-section active">
+            <div class="admin-main-header">
+                <h1>Dashboard</h1>
+            </div>
+            <div class="stat-cards">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Tổng Sản Phẩm</h3>
+                        <i class="fas fa-boxes card-icon"></i>
+                    </div>
+                    <div class="value" id="total-products">0</div>
+                </div>
+                 <div class="card">
+                    <div class="card-header">
+                        <h3>Tổng Doanh Thu</h3>
+                         <i class="fas fa-dollar-sign card-icon" style="color: var(--success-color); background: #e0f2f1;"></i>
+                    </div>
+                    <div class="value" id="total-revenue">0đ</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Bán Chạy Nhất</h3>
+                        <i class="fas fa-fire card-icon" style="color: var(--danger-color); background: #fee2e2;"></i>
+                    </div>
+                    <div class="value" id="top-seller" style="font-size: 1.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">N/A</div>
+                    <div class="sub-value" id="top-seller-sales">0 lượt mua</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Người Dùng</h3>
+                        <i class="fas fa-users card-icon" style="color: var(--warning-color); background: #fffbeb;"></i>
+                    </div>
+                    <div class="value" id="total-users">0</div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <h3 style="margin-bottom: 20px;">Biểu Đồ Doanh Thu (Sắp ra mắt)</h3>
+                <i class="fas fa-chart-line fa-3x" style="opacity: 0.5;"></i>
+                <p style="margin-top: 10px;">Tích hợp thư viện như Chart.js hoặc ApexCharts tại đây để trực quan hóa dữ liệu.</p>
+            </div>
+        </section>
+
+        <!-- Products Section -->
+        <section id="products-tab" class="content-section">
+            <div class="admin-main-header">
+                <h1>Quản lý Sản phẩm</h1>
+                <button class="btn" id="addProductBtn"><i class="fas fa-plus"></i> Thêm Sản Phẩm</button>
+            </div>
+            <div class="table-container">
+                <div class="table-header">
+                    <input type="text" id="productSearchInput" placeholder="🔍 Tìm kiếm sản phẩm...">
+                </div>
+                <table id="products-table">
+                    <thead>
+                        <tr>
+                            <th>Hình ảnh</th>
+                            <th>Tên sản phẩm</th>
+                            <th>Giá</th>
+                            <th>Kho</th>
+                            <th>Đã bán</th>
+                            <th>Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody id="products-table-body">
+                        <!-- Dữ liệu sản phẩm sẽ được chèn vào đây -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Users Section -->
+        <section id="users-tab" class="content-section">
+            <div class="admin-main-header">
+                <h1>Quản lý Người dùng</h1>
+            </div>
+             <div class="table-container">
+                <div class="table-header">
+                    <input type="text" id="userSearchInput" placeholder="🔍 Tìm kiếm người dùng...">
+                </div>
+                <table id="users-table">
+                    <thead>
+                        <tr>
+                            <th>Tên người dùng</th>
+                            <th>Email</th>
+                            <th>Vai trò</th>
+                            <th>Ngày đăng ký</th>
+                            <th>Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        <!-- Dữ liệu người dùng sẽ được chèn vào đây -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Broadcast Section -->
+        <section id="broadcast-tab" class="content-section">
+            <div class="admin-main-header">
+                <h1>Gửi Thông Báo Toàn Web</h1>
+            </div>
+            <div class="card">
+                <form id="broadcastForm">
+                    <div class="form-group full-width">
+                        <label for="broadcastMessage">Nội dung thông báo</label>
+                        <textarea id="broadcastMessage" required placeholder="Nhập thông báo..."></textarea>
+                    </div>
+                    <button type="submit" class="btn"><i class="fas fa-paper-plane"></i> Gửi Thông Báo</button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <!-- Product Add/Edit Modal -->
+    <div id="product-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Thêm Sản Phẩm Mới</h2>
+                <button id="close-modal-btn" class="close-button">×</button>
+            </div>
+            <form id="product-form">
+                <input type="hidden" id="productId">
+                <div class="form-grid">
+                    <div class="form-group"><label for="title">Tên sản phẩm</label><input type="text" id="title" required></div>
+                    <div class="form-group"><label for="category">Danh mục</label><input type="text" id="category" placeholder="e.g., Thú cưng, Giống cây..."></div>
+                    <div class="form-group"><label for="price">Giá bán (VNĐ)</label><input type="number" id="price" required></div>
+                    <div class="form-group"><label for="oldPrice">Giá cũ (VNĐ, tùy chọn)</label><input type="number" id="oldPrice"></div>
+                    <div class="form-group"><label for="stock">Số lượng kho</label><input type="number" id="stock" required></div>
+                    <div class="form-group"><label for="badge">Nhãn (Hot, Mới...)</label><input type="text" id="badge" placeholder="e.g., Hot, Sale"></div>
+                    <div class="form-group full-width"><label for="description">Mô tả ngắn</label><textarea id="description" required></textarea></div>
+                    <div class="form-group full-width"><label for="detailedDescription">Mô tả chi tiết</label><textarea id="detailedDescription"></textarea></div>
+                    <div class="form-group full-width">
+                        <label for="images">Link hình ảnh (cách nhau bằng dấu phẩy hoặc xuống dòng)</label>
+                        <textarea id="images"></textarea>
+                        <div class="image-preview" id="image-preview"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" id="cancel-btn" style="background-color: var(--gray-color);">Hủy</button>
+                    <button type="submit" class="btn" id="save-product-btn">Lưu Sản Phẩm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="main.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
