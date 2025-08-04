@@ -20,13 +20,14 @@ const AdminPanel = {
     // --- INITIALIZATION ---
     init() {
         document.addEventListener('DOMContentLoaded', async () => {
-            this.currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            // Lấy thông tin người dùng từ main.js hoặc localStorage
+            this.currentUser = window.currentUser || JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.USER));
             if (!this.checkAuth()) return;
 
             this.bindEvents();
             await this.fetchInitialData();
             this.setupWebSocket();
-            this.navigateToTab('dashboard-tab');
+            this.navigateToTab('dashboard-tab'); // Bắt đầu ở trang dashboard
         });
     },
 
@@ -67,7 +68,7 @@ const AdminPanel = {
         // Image preview
         document.getElementById('images').addEventListener('input', (e) => this.updateImagePreview(e.target.value));
 
-        // Table search
+        // Table search (sử dụng 'input' để tìm kiếm tức thì)
         document.getElementById('productSearchInput').addEventListener('input', (e) => this.filterAndRenderProducts(e.target.value));
         document.getElementById('userSearchInput').addEventListener('input', (e) => this.filterAndRenderUsers(e.target.value));
 
@@ -82,7 +83,13 @@ const AdminPanel = {
         // Logout
         document.getElementById('adminLogout').addEventListener('click', (e) => {
             e.preventDefault();
-            AuthManager.logout();
+            // Gọi hàm logout từ main.js để đảm bảo đồng bộ
+            if (window.AuthManager) {
+                window.AuthManager.logout();
+            } else {
+                localStorage.clear();
+                window.location.href = 'index.html';
+            }
         });
     },
     
@@ -93,8 +100,8 @@ const AdminPanel = {
         
         try {
             const [productsData, usersData] = await Promise.all([
-                ApiManager.call('/products?limit=1000', 'GET', null, false),
-                ApiManager.call('/users', 'GET', null, true) // requires admin auth
+                ApiManager.call('/products?limit=1000&sort=-createdAt', 'GET', null, false), // Lấy sản phẩm mới nhất trước
+                ApiManager.call('/users', 'GET', null, true) // Yêu cầu quyền admin
             ]);
 
             this.products = productsData.data.products;
@@ -103,7 +110,7 @@ const AdminPanel = {
             this.generateActivityFeed();
             this.renderAll();
         } catch (error) {
-            Utils.showToast('Không thể tải dữ liệu ban đầu. ' + error.message, 'error');
+            Utils.showToast('Không thể tải dữ liệu. ' + error.message, 'error');
             this.setErrorState('products-table-body', 6, 'Lỗi tải sản phẩm');
             this.setErrorState('users-table-body', 5, 'Lỗi tải người dùng');
         }
@@ -117,7 +124,7 @@ const AdminPanel = {
 
     setLoadingState(tbodyId, colspan) {
         const tbody = document.getElementById(tbodyId);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="loading-state"><div class="spinner"></div></div></td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="loading-state"><div class="spinner"></div><p>Đang tải dữ liệu...</p></div></td></tr>`;
     },
 
     setErrorState(tbodyId, colspan, message) {
@@ -141,21 +148,15 @@ const AdminPanel = {
     },
 
     generateActivityFeed() {
-        const productActivity = this.products
-            .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
-            .slice(0, 5)
-            .map(p => ({ type: 'product', text: `Sản phẩm mới: <strong>${p.title}</strong>`, time: p.createdAt }));
-        
-        const userActivity = this.users
-            .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
-            .slice(0, 5)
-            .map(u => ({ type: 'user', text: `Người dùng mới: <strong>${u.name}</strong>`, time: u.createdAt }));
+        const productActivity = this.products.slice(0, 5).map(p => ({ type: 'product', text: `Sản phẩm mới: <strong>${p.title}</strong>`, time: p.createdAt }));
+        const userActivity = this.users.slice(0, 5).map(u => ({ type: 'user', text: `Người dùng mới: <strong>${u.name}</strong>`, time: u.createdAt }));
             
         this.activity = [...productActivity, ...userActivity].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
     },
 
     renderActivityFeed() {
         const feedContainer = document.getElementById('activity-feed-content');
+        if (!feedContainer) return;
         if (this.activity.length === 0) {
             feedContainer.innerHTML = `<div class="empty-state" style="padding: 1rem 0;"><p>Chưa có hoạt động nào.</p></div>`;
             return;
@@ -166,22 +167,24 @@ const AdminPanel = {
                     <i class="fas ${item.type === 'user' ? 'fa-user-plus' : 'fa-plus-circle'}"></i>
                 </div>
                 <div class="activity-text">${item.text}</div>
-                <div class="activity-time">${moment(item.time).fromNow()}</div>
+                <div class="activity-time">${this.moment(item.time).fromNow()}</div>
             </div>
         `).join('');
     },
     
     // --- TABLE MANAGEMENT (Products & Users) ---
     filterAndRenderProducts(searchTerm = '') {
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
         const filtered = searchTerm
-            ? this.products.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()))
+            ? this.products.filter(p => p.title.toLowerCase().includes(lowerCaseSearchTerm))
             : [...this.products];
         this.renderPaginatedTable('product', filtered);
     },
 
     filterAndRenderUsers(searchTerm = '') {
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
         const filtered = searchTerm
-            ? this.users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase()))
+            ? this.users.filter(u => u.name.toLowerCase().includes(lowerCaseSearchTerm) || u.email.toLowerCase().includes(lowerCaseSearchTerm))
             : [...this.users];
         this.renderPaginatedTable('user', filtered);
     },
@@ -192,11 +195,12 @@ const AdminPanel = {
         
         // Sort data
         const sortedData = [...data].sort((a, b) => {
-            const valA = a[sortState.column];
-            const valB = b[sortState.column];
-            if (valA < valB) return sortState.order === 'asc' ? -1 : 1;
-            if (valA > valB) return sortState.order === 'asc' ? 1 : -1;
-            return 0;
+            const valA = a[sortState.column] || '';
+            const valB = b[sortState.column] || '';
+            if (typeof valA === 'string') {
+                 return sortState.order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            return sortState.order === 'asc' ? valA - valB : valB - valA;
         });
 
         // Paginate data
@@ -218,13 +222,13 @@ const AdminPanel = {
         }
 
         // Render pagination controls
-        this.renderPagination(type, currentPage, totalPages);
+        this.renderPagination(type, currentPage, totalPages, totalItems);
     },
     
     renderProductRow(p) {
         return `
             <tr>
-                <td><img src="${p.images?.[0] || 'https://via.placeholder.com/50'}" alt="${p.title}" class="product-image-thumb"></td>
+                <td><img src="${p.images?.[0] || 'https://via.placeholder.com/50x50?text=No+Img'}" alt="${p.title}" class="product-image-thumb"></td>
                 <td>${p.title}</td>
                 <td>${Utils.formatPrice(p.price)}</td>
                 <td>${p.stock}</td>
@@ -246,28 +250,28 @@ const AdminPanel = {
                 <td>${Utils.formatDate(u.createdAt)}</td>
                 <td class="actions">
                    <button class="btn-promote" data-id="${u._id}" title="Thăng cấp Admin" ${u.role === 'admin' ? 'disabled' : ''}><i class="fas fa-user-shield"></i></button>
-                   <button class="btn-ban" data-id="${u._id}" title="Khóa tài khoản"><i class="fas fa-user-slash"></i></button>
+                   <button class="btn-ban" data-id="${u._id}" title="Khóa tài khoản" ${u.role === 'admin' ? 'disabled' : ''}><i class="fas fa-user-slash"></i></button>
                 </td>
             </tr>
         `;
     },
 
-    renderPagination(type, currentPage, totalPages) {
+    renderPagination(type, currentPage, totalPages, totalItems) {
         const container = document.getElementById(`${type}-pagination`);
         const pageInfo = document.getElementById(`${type}-page-info`);
         
         if (totalPages <= 1) {
             container.innerHTML = '';
-            pageInfo.textContent = '';
+            pageInfo.textContent = `Tổng: ${totalItems} mục`;
             return;
         }
 
         container.innerHTML = `
-            <button id="${type}-prev-btn" ${currentPage === 1 ? 'disabled' : ''}>Trước</button>
+            <button id="${type}-prev-btn" ${currentPage === 1 ? 'disabled' : ''}><i class="fas fa-chevron-left"></i></button>
             <span>Trang ${currentPage} / ${totalPages}</span>
-            <button id="${type}-next-btn" ${currentPage === totalPages ? 'disabled' : ''}>Sau</button>
+            <button id="${type}-next-btn" ${currentPage === totalPages ? 'disabled' : ''}><i class="fas fa-chevron-right"></i></button>
         `;
-        pageInfo.textContent = `Hiển thị ${this.itemsPerPage * (currentPage - 1) + 1} - ${Math.min(this.itemsPerPage * currentPage, this[type + 's'].length)} của ${this[type + 's'].length}`;
+        pageInfo.textContent = `Hiển thị ${this.itemsPerPage * (currentPage - 1) + 1} - ${Math.min(this.itemsPerPage * currentPage, totalItems)} của ${totalItems} mục`;
 
         document.getElementById(`${type}-prev-btn`).addEventListener('click', () => this.changePage(type, -1));
         document.getElementById(`${type}-next-btn`).addEventListener('click', () => this.changePage(type, 1));
@@ -292,30 +296,29 @@ const AdminPanel = {
             sortState.order = 'asc';
         }
         
-        // Reset to first page on new sort
         this[`${type}CurrentPage`] = 1;
 
-        // Update sort icons
         const tableId = `${type}s-table`;
         document.querySelectorAll(`#${tableId} th[data-sort] .sort-icon`).forEach(icon => {
             icon.className = 'fas fa-sort sort-icon';
         });
         const activeTh = document.querySelector(`#${tableId} th[data-sort="${column}"] .sort-icon`);
-        if (activeTh) {
-            activeTh.className = `fas fa-sort-${sortState.order === 'asc' ? 'up' : 'down'} sort-icon`;
-        }
+        if (activeTh) activeTh.className = `fas fa-sort-${sortState.order === 'asc' ? 'up' : 'down'} sort-icon`;
         
         this[`filterAndRender${type.charAt(0).toUpperCase() + type.slice(1)}s`]();
     },
 
     handleTableActions(e, type) {
-        const id = e.target.closest('button')?.dataset.id;
+        const button = e.target.closest('button');
+        if (!button) return;
+        
+        const id = button.dataset.id;
         if (!id) return;
 
-        if (e.target.closest('.btn-edit')) this.handleEditProduct(id);
-        if (e.target.closest('.btn-delete')) this.handleDeleteProduct(id);
-        if (e.target.closest('.btn-promote')) this.handlePromoteUser(id);
-        if (e.target.closest('.btn-ban')) this.handleBanUser(id);
+        if (button.classList.contains('btn-edit')) this.handleEditProduct(id);
+        if (button.classList.contains('btn-delete')) this.handleDeleteProduct(id);
+        if (button.classList.contains('btn-promote')) this.handlePromoteUser(id);
+        if (button.classList.contains('btn-ban')) this.handleBanUser(id);
     },
 
     // --- CRUD & ACTIONS ---
@@ -326,7 +329,7 @@ const AdminPanel = {
 
         const productData = {
             title: document.getElementById('title').value.trim(),
-            category: document.getElementById('category').value.trim(),
+            category: document.getElementById('category').value.trim() || 'Chưa phân loại',
             price: parseInt(document.getElementById('price').value, 10),
             oldPrice: document.getElementById('oldPrice').value ? parseInt(document.getElementById('oldPrice').value, 10) : undefined,
             stock: parseInt(document.getElementById('stock').value, 10),
@@ -336,8 +339,8 @@ const AdminPanel = {
             badge: document.getElementById('badge').value.trim() || undefined,
         };
         
-        if (!productData.title || !productData.price || !productData.stock) {
-            Utils.showToast('Vui lòng điền các trường bắt buộc (Tên, Giá, Kho).', 'error');
+        if (!productData.title || !productData.price || productData.stock === undefined) {
+            Utils.showToast('Vui lòng điền các trường bắt buộc (*).', 'error');
             return;
         }
 
@@ -361,7 +364,7 @@ const AdminPanel = {
     },
 
     async handleDeleteProduct(id) {
-        if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return;
+        if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này? Thao tác này không thể hoàn tác.')) return;
         try {
             await ApiManager.call(`/products/${id}`, 'DELETE', null, true);
             Utils.showToast('Đã xóa sản phẩm thành công.', 'success');
@@ -374,8 +377,8 @@ const AdminPanel = {
     async handlePromoteUser(id) {
         if (!confirm('Bạn có chắc chắn muốn thăng cấp người dùng này thành Admin?')) return;
         try {
-            // This API endpoint is hypothetical
-            await ApiManager.call(`/users/${id}/promote`, 'PATCH', null, true);
+            // API endpoint này cần được tạo ở backend
+            await ApiManager.call(`/users/${id}`, 'PATCH', { role: 'admin' }, true);
             Utils.showToast('Đã thăng cấp người dùng.', 'success');
             await this.fetchInitialData();
         } catch (error) {
@@ -386,8 +389,8 @@ const AdminPanel = {
     async handleBanUser(id) {
         if (!confirm('Bạn có chắc chắn muốn cấm người dùng này?')) return;
         try {
-            // This API endpoint is hypothetical
-            await ApiManager.call(`/users/${id}/ban`, 'PATCH', null, true);
+            // API endpoint này cần được tạo ở backend
+            await ApiManager.call(`/users/${id}`, 'PATCH', { active: false }, true);
             Utils.showToast('Đã cấm người dùng.', 'success');
             await this.fetchInitialData();
         } catch (error) {
@@ -463,15 +466,19 @@ const AdminPanel = {
     setupWebSocket() {
         try {
             if (typeof io === 'undefined') {
-                console.warn("Socket.IO library not found. Broadcast feature disabled.");
+                console.warn("Thư viện Socket.IO không tìm thấy. Tính năng thông báo bị vô hiệu hóa.");
                 return;
             }
-            this.socket = io(CONFIG.API_BASE_URL.replace('/api/v1','')); 
+            // Kết nối đến server gốc, không có /api/v1
+            this.socket = io(CONFIG.API_BASE_URL.replace('/api/v1',''), { transports: ['websocket'] }); 
             this.socket.on('connect', () => {
                 Utils.showToast('Hệ thống thông báo sẵn sàng!', 'info');
+                document.querySelector('#broadcastForm button').disabled = false;
             });
-            this.socket.on('connect_error', () => {
+            this.socket.on('connect_error', (err) => {
                 Utils.showToast('Không thể kết nối server thông báo!', 'error');
+                console.error('Socket connect_error:', err);
+                document.querySelector('#broadcastForm button').disabled = true;
             });
         } catch (e) {
             console.error("Lỗi khởi tạo WebSocket:", e.message);
@@ -489,22 +496,28 @@ const AdminPanel = {
         } else if (!this.socket || !this.socket.connected) {
             Utils.showToast('Chưa kết nối đến server thông báo.', 'error');
         }
+    },
+    
+    // --- UTILITIES ---
+    moment(dateString) {
+        return {
+            fromNow: () => {
+                const diff = new Date() - new Date(dateString);
+                const seconds = Math.floor(diff / 1000);
+                if (seconds < 2) return "vài giây trước";
+                if (seconds < 60) return `${seconds} giây trước`;
+                const minutes = Math.floor(seconds / 60);
+                if (minutes < 2) return "1 phút trước";
+                if (minutes < 60) return `${minutes} phút trước`;
+                const hours = Math.floor(minutes / 60);
+                if (hours < 2) return "1 giờ trước";
+                if (hours < 24) return `${hours} giờ trước`;
+                const days = Math.floor(hours / 24);
+                if (days < 2) return "1 ngày trước";
+                return `${days} ngày trước`;
+            }
+        }
     }
 };
-
-// --- Moment.js simplified 'fromNow' ---
-const moment = (dateString) => ({
-    fromNow: () => {
-        const diff = new Date() - new Date(dateString);
-        const seconds = Math.floor(diff / 1000);
-        if (seconds < 60) return `${seconds} giây trước`;
-        const minutes = Math.floor(seconds / 60);
-        if (minutes < 60) return `${minutes} phút trước`;
-        const hours = Math.floor(minutes / 60);
-        if (hours < 24) return `${hours} giờ trước`;
-        const days = Math.floor(hours / 24);
-        return `${days} ngày trước`;
-    }
-});
 
 AdminPanel.init();
