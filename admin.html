@@ -31,6 +31,7 @@
             color: var(--secondary-color);
             display: flex;
             min-height: 100vh;
+            overflow-x: hidden;
         }
 
         /* --- Sidebar --- */
@@ -68,7 +69,7 @@
             font-weight: 500;
         }
         .admin-nav .nav-item:hover { background: #374151; color: white; transform: translateX(5px); }
-        .admin-nav .nav-item.active { background: var(--primary-color); color: white; font-weight: 600; }
+        .admin-nav .nav-item.active { background: var(--primary-color); color: white; font-weight: 600; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.4); }
         .admin-nav .nav-item i { margin-right: 1rem; width: 20px; text-align: center; font-size: 1.1rem; }
 
         .sidebar-footer {
@@ -77,15 +78,16 @@
             padding-top: 1.5rem;
             border-top: 1px solid #374151;
         }
-        .sidebar-footer a { color: var(--gray-color); font-size: 0.9rem; text-decoration: none; transition: color 0.2s; }
-        .sidebar-footer a:hover { color: white; }
+        .sidebar-footer p { font-size: 0.9rem; margin-bottom: 0.5rem; }
+        .sidebar-footer a { color: var(--gray-color); text-decoration: none; transition: color 0.2s; }
+        .sidebar-footer a:hover { color: white; text-decoration: underline; }
 
         /* --- Main Content --- */
         .admin-main {
             margin-left: 260px;
             width: calc(100% - 260px);
             padding: 2rem;
-            transition: margin-left var(--transition);
+            transition: margin-left var(--transition), width var(--transition);
         }
         .admin-header {
             display: flex;
@@ -95,8 +97,8 @@
             flex-wrap: wrap;
             gap: 1rem;
         }
-        .admin-header h1 { font-size: 2.25rem; margin: 0; font-weight: 700; }
-        .menu-toggle {
+        #pageTitle { font-size: 2.25rem; margin: 0; font-weight: 700; }
+        #menuToggle {
             display: none;
             background: none;
             border: none;
@@ -112,8 +114,9 @@
         /* --- Dashboard Specifics --- */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
             gap: 1.5rem;
+            margin-top: 1.5rem;
         }
         .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; }
         .card { background: white; padding: 1.5rem; border-radius: var(--border-radius); box-shadow: var(--shadow-md); transition: transform 0.2s, box-shadow 0.2s; }
@@ -124,69 +127,74 @@
         .card .value { font-size: 2rem; font-weight: 700; }
         .card .sub-value { font-size: 0.9rem; color: var(--gray-color); margin-top: 5px; }
 
-        .activity-feed { background: white; padding: 1.5rem; border-radius: var(--border-radius); box-shadow: var(--shadow-md); }
-        .activity-feed h3 { margin-bottom: 1rem; }
+        .activity-feed, .chart-container, #broadcast-form-container { background: white; padding: 1.5rem; border-radius: var(--border-radius); box-shadow: var(--shadow-md); }
+        .activity-feed h3, .chart-container h3, #broadcast-form-container h3 { margin-bottom: 1rem; }
         .activity-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border-color); }
         .activity-item:last-child { border-bottom: none; }
         .activity-icon { font-size: 1.2rem; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
-        .activity-icon.user { background: #e0f2f1; color: #14b8a6; }
-        .activity-icon.product { background: #eef2ff; color: var(--primary-color); }
+        .activity-icon.user { background: #dcfce7; color: #16a34a; }
+        .activity-icon.product { background: #e0e7ff; color: #4338ca; }
         .activity-text { flex-grow: 1; font-size: 0.9rem; }
-        .activity-time { font-size: 0.8rem; color: var(--gray-color); }
+        .activity-time { font-size: 0.8rem; color: var(--gray-color); white-space: nowrap; }
         
         /* --- Tables --- */
-        .table-container { background: white; border-radius: var(--border-radius); box-shadow: var(--shadow-md); overflow: hidden; }
+        .table-container { background: white; border-radius: var(--border-radius); box-shadow: var(--shadow-md); overflow-x: auto; }
         .table-header { padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color); }
-        .table-header input { padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; width: 300px; }
+        .table-header input { padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; width: 300px; transition: var(--transition); }
+        .table-header input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); outline: none; }
         
-        table { width: 100%; border-collapse: collapse; }
+        table { width: 100%; border-collapse: collapse; min-width: 800px; }
         th, td { padding: 1rem 1.5rem; text-align: left; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
-        thead { background: var(--light-color); }
-        thead th { font-weight: 600; color: var(--gray-color); cursor: pointer; user-select: none; }
-        thead th:hover { color: var(--secondary-color); }
-        thead th .sort-icon { margin-left: 0.5rem; opacity: 0.5; }
+        thead { background: #f9fafb; }
+        thead th { font-weight: 600; color: var(--gray-color); cursor: pointer; user-select: none; white-space: nowrap; }
+        thead th:hover .sort-icon { opacity: 1; }
+        thead th .sort-icon { margin-left: 0.5rem; opacity: 0.5; transition: opacity 0.2s; }
         tbody tr:last-child td { border-bottom: none; }
-        tbody tr:hover { background: #f9fafb; }
+        tbody tr:hover { background: #f3f4f6; }
         .product-image-thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; }
         
         .actions button { background: none; border: none; cursor: pointer; padding: 5px; font-size: 1rem; margin: 0 5px; transition: color 0.2s, transform 0.2s; }
         .actions button:hover { transform: scale(1.2); }
+        .actions button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         .btn-edit { color: var(--primary-color); }
         .btn-delete { color: var(--danger-color); }
         .btn-promote { color: var(--success-color); }
         .btn-ban { color: var(--warning-color); }
+        .role-badge { padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .role-badge.admin { background: #fee2e2; color: var(--danger-color); }
+        .role-badge.user { background: #e0f2fe; color: #0284c7; }
         
-        .table-footer { padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+        .table-footer { padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
         .pagination { display: flex; gap: 0.5rem; align-items: center; }
-        .pagination button { padding: 0.5rem 1rem; border: 1px solid var(--border-color); background: white; border-radius: 6px; cursor: pointer; }
+        .pagination button { padding: 0.5rem 1rem; border: 1px solid var(--border-color); background: white; border-radius: 6px; cursor: pointer; transition: var(--transition); }
         .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .pagination button:hover:not(:disabled) { background: var(--light-color); }
+        .pagination button:hover:not(:disabled) { background: var(--light-color); border-color: var(--primary-color); color: var(--primary-color); }
         
         .loading-state, .empty-state { text-align: center; padding: 3rem; color: var(--gray-color); }
         .spinner { width: 40px; height: 40px; border: 4px solid var(--border-color); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; margin: auto; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* --- Generic Button --- */
-        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 600; text-decoration: none; cursor: pointer; font-size: 14px; background-color: var(--primary-color); color: white; transition: background-color 0.2s, transform 0.2s; }
-        .btn:hover { background-color: #4338ca; transform: translateY(-2px); }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 600; text-decoration: none; cursor: pointer; font-size: 14px; background-color: var(--primary-color); color: white; transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+        .btn:hover { background-color: #4338ca; transform: translateY(-2px); box-shadow: var(--shadow-md); }
         .btn i { font-size: 1rem; }
 
         /* --- Modal --- */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(17, 24, 39, 0.6); backdrop-filter: blur(4px);
-            z-index: 101; justify-content: center; align-items: center; animation: fadeIn 0.3s;
+            z-index: 101; justify-content: center; align-items: start; animation: fadeIn 0.3s; padding: 2rem 0;
         }
         .modal-content {
             background: white; padding: 2.5rem; border-radius: var(--border-radius); width: 95%; max-width: 800px;
-            max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg);
-            transform: scale(0.95); animation: zoomIn 0.3s forwards;
+            max-height: calc(100vh - 4rem); overflow-y: auto; box-shadow: var(--shadow-lg);
+            opacity: 0; transform: scale(0.95); animation: zoomIn 0.3s forwards;
         }
         @keyframes zoomIn { to { opacity: 1; transform: scale(1); } }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); }
         .modal-header h2 { margin: 0; font-size: 1.5rem; }
-        .close-button { background: none; border: none; font-size: 1.75rem; cursor: pointer; color: var(--gray-color); transition: color 0.2s, transform 0.2s; }
-        .close-button:hover { color: var(--secondary-color); transform: rotate(90deg); }
+        #close-modal-btn { background: none; border: none; font-size: 1.75rem; cursor: pointer; color: var(--gray-color); transition: color 0.2s, transform 0.2s; }
+        #close-modal-btn:hover { color: var(--secondary-color); transform: rotate(90deg); }
 
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
         .form-group { display: flex; flex-direction: column; }
@@ -194,7 +202,7 @@
         .form-group label { margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
         .form-group input, .form-group textarea, .form-group select {
             padding: 0.875rem 1rem; border: 1px solid var(--border-color); border-radius: 8px;
-            font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; background-color: var(--light-color);
+            font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; background-color: white; font-family: inherit;
         }
         .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
             outline: none; border-color: var(--primary-color);
@@ -202,22 +210,28 @@
         }
         .form-group textarea { min-height: 120px; resize: vertical; }
 
-        .image-preview { display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; background-color: #f3f4f6; padding: 1rem; border-radius: 8px; min-height: 120px; }
-        .image-preview img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 2px solid var(--border-color); }
-        .modal-footer { margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem; }
+        .image-preview { display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; background-color: #f3f4f6; padding: 1rem; border-radius: 8px; min-height: 120px; border: 1px dashed var(--border-color); }
+        .image-preview img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 2px solid white; box-shadow: var(--shadow-sm); }
+        .modal-footer { margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
         
         /* --- Responsive --- */
         @media (max-width: 992px) {
-            .admin-sidebar { transform: translateX(-100%); }
+            .admin-sidebar { transform: translateX(-100%); box-shadow: var(--shadow-lg); }
             .admin-sidebar.open { transform: translateX(0); }
             .admin-main { margin-left: 0; width: 100%; }
-            .menu-toggle { display: block; }
+            #menuToggle { display: block; }
         }
         @media (max-width: 768px) {
+            .admin-main { padding: 1.5rem; }
             .admin-header h1 { font-size: 1.75rem; }
             .table-header { flex-direction: column; gap: 1rem; align-items: stretch; }
             .table-header input { width: 100%; }
             .dashboard-grid { grid-template-columns: 1fr; }
+            .stat-cards { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 480px) {
+            .stat-cards { grid-template-columns: 1fr; }
+            .table-footer { flex-direction: column; gap: 1rem; }
         }
     </style>
 </head>
@@ -253,16 +267,16 @@
                     <div class="value" id="total-products">0</div>
                 </div>
                  <div class="card">
-                    <div class="card-header"><h3>Tổng Doanh Thu</h3><i class="fas fa-dollar-sign card-icon" style="color: var(--success-color); background: #e0f2f1;"></i></div>
+                    <div class="card-header"><h3>Doanh Thu</h3><i class="fas fa-dollar-sign card-icon" style="color: var(--success-color); background: #dcfce7;"></i></div>
                     <div class="value" id="total-revenue">0đ</div>
                 </div>
                 <div class="card">
-                    <div class="card-header"><h3>Bán Chạy Nhất</h3><i class="fas fa-fire card-icon" style="color: var(--danger-color); background: #fee2e2;"></i></div>
+                    <div class="card-header"><h3>Bán Chạy</h3><i class="fas fa-fire card-icon" style="color: var(--danger-color); background: #fee2e2;"></i></div>
                     <div class="value" id="top-seller" style="font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">N/A</div>
                     <div class="sub-value" id="top-seller-sales">0 lượt mua</div>
                 </div>
                 <div class="card">
-                    <div class="card-header"><h3>Người Dùng</h3><i class="fas fa-users card-icon" style="color: var(--warning-color); background: #fffbeb;"></i></div>
+                    <div class="card-header"><h3>Người Dùng</h3><i class="fas fa-users card-icon" style="color: var(--warning-color); background: #fef9c3;"></i></div>
                     <div class="value" id="total-users">0</div>
                 </div>
             </div>
@@ -275,7 +289,10 @@
                 </div>
                 <div class="chart-container">
                     <h3>Biểu Đồ Doanh Thu (Sắp ra mắt)</h3>
-                    <i class="fas fa-chart-line fa-3x" style="opacity: 0.5; margin-top: 1rem;"></i>
+                    <div class="empty-state" style="padding: 1rem 0;">
+                        <i class="fas fa-chart-line fa-3x" style="opacity: 0.5;"></i>
+                        <p>Dữ liệu biểu đồ sẽ sớm được tích hợp.</p>
+                    </div>
                 </div>
             </div>
         </section>
@@ -287,10 +304,10 @@
                     <input type="text" id="productSearchInput" placeholder="🔍 Tìm kiếm sản phẩm...">
                     <button class="btn" id="addProductBtn"><i class="fas fa-plus"></i> Thêm Sản Phẩm</button>
                 </div>
-                <table>
+                <table id="products-table">
                     <thead>
                         <tr>
-                            <th data-sort="images">Hình ảnh</th>
+                            <th>Hình ảnh</th>
                             <th data-sort="title">Tên sản phẩm <i class="fas fa-sort sort-icon"></i></th>
                             <th data-sort="price">Giá <i class="fas fa-sort sort-icon"></i></th>
                             <th data-sort="stock">Kho <i class="fas fa-sort sort-icon"></i></th>
@@ -311,9 +328,9 @@
         <section id="users-tab" class="content-section">
              <div class="table-container">
                 <div class="table-header">
-                    <input type="text" id="userSearchInput" placeholder="🔍 Tìm kiếm người dùng...">
+                    <input type="text" id="userSearchInput" placeholder="🔍 Tìm kiếm người dùng theo tên hoặc email...">
                 </div>
-                <table>
+                <table id="users-table">
                     <thead>
                         <tr>
                             <th data-sort="name">Tên người dùng <i class="fas fa-sort sort-icon"></i></th>
@@ -334,7 +351,7 @@
 
         <!-- Broadcast Section -->
         <section id="broadcast-tab" class="content-section">
-            <div class="card">
+            <div id="broadcast-form-container">
                 <h3>Gửi Thông Báo Toàn Web</h3>
                 <p class="sub-value" style="margin-bottom: 1.5rem;">Thông báo sẽ được gửi tới tất cả người dùng đang truy cập trang web thông qua WebSocket.</p>
                 <form id="broadcastForm">
@@ -355,20 +372,20 @@
                 <h2 id="modal-title">Thêm Sản Phẩm Mới</h2>
                 <button id="close-modal-btn" class="close-button">×</button>
             </div>
-            <form id="product-form">
+            <form id="product-form" novalidate>
                 <input type="hidden" id="productId">
                 <div class="form-grid">
-                    <div class="form-group"><label for="title">Tên sản phẩm</label><input type="text" id="title" required></div>
+                    <div class="form-group"><label for="title">Tên sản phẩm *</label><input type="text" id="title" required></div>
                     <div class="form-group"><label for="category">Danh mục</label><input type="text" id="category" placeholder="e.g., Thú cưng, Giống cây..."></div>
-                    <div class="form-group"><label for="price">Giá bán (VNĐ)</label><input type="number" id="price" required min="0"></div>
+                    <div class="form-group"><label for="price">Giá bán (VNĐ) *</label><input type="number" id="price" required min="0"></div>
                     <div class="form-group"><label for="oldPrice">Giá cũ (VNĐ)</label><input type="number" id="oldPrice" min="0"></div>
-                    <div class="form-group"><label for="stock">Số lượng kho</label><input type="number" id="stock" required min="0"></div>
+                    <div class="form-group"><label for="stock">Số lượng kho *</label><input type="number" id="stock" required min="0" value="99"></div>
                     <div class="form-group"><label for="badge">Nhãn (Hot, Sale...)</label><input type="text" id="badge" placeholder="e.g., Hot, Sale"></div>
-                    <div class="form-group full-width"><label for="description">Mô tả ngắn</label><textarea id="description" required></textarea></div>
+                    <div class="form-group full-width"><label for="description">Mô tả ngắn</label><textarea id="description"></textarea></div>
                     <div class="form-group full-width"><label for="detailedDescription">Mô tả chi tiết</label><textarea id="detailedDescription"></textarea></div>
                     <div class="form-group full-width">
                         <label for="images">Link hình ảnh (cách nhau bằng dấu phẩy hoặc xuống dòng)</label>
-                        <textarea id="images"></textarea>
+                        <textarea id="images" placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"></textarea>
                         <div class="image-preview" id="image-preview"></div>
                     </div>
                 </div>
@@ -380,6 +397,7 @@
         </div>
     </div>
 
+    <!-- Toast Container - Sử dụng từ main.js -->
     <div id="toastContainer"></div>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
