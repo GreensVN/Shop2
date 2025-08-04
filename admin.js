@@ -1,23 +1,32 @@
 "use strict";
 
 const AdminPanel = {
-    // --- CONFIG ---
-    apiUrl: 'https://shop-4mlk.onrender.com/api/v1',
-    socketUrl: 'https://shop-4mlk.onrender.com/api/v1', // Thay đổi nếu có
+    // --- STATE ---
     products: [],
     users: [],
+    activity: [],
     currentUser: null,
     socket: null,
+    
+    // Pagination State
+    productCurrentPage: 1,
+    userCurrentPage: 1,
+    itemsPerPage: 7,
 
+    // Sorting State
+    productSort: { column: 'title', order: 'asc' },
+    userSort: { column: 'name', order: 'asc' },
+
+    // --- INITIALIZATION ---
     init() {
-        document.addEventListener('DOMContentLoaded', () => {
-            this.currentUser = window.currentUser;
+        document.addEventListener('DOMContentLoaded', async () => {
+            this.currentUser = JSON.parse(localStorage.getItem('currentUser'));
             if (!this.checkAuth()) return;
 
             this.bindEvents();
-            this.fetchInitialData();
+            await this.fetchInitialData();
             this.setupWebSocket();
-            document.querySelector('.nav-item[data-tab="dashboard-tab"]').click();
+            this.navigateToTab('dashboard-tab');
         });
     },
 
@@ -27,20 +36,20 @@ const AdminPanel = {
             window.location.href = 'index.html';
             return false;
         }
-        document.getElementById('adminName').textContent = this.currentUser.name;
+        document.getElementById('adminName').textContent = this.currentUser.name || 'Admin';
         return true;
     },
 
     bindEvents() {
         // Tab navigation
         document.querySelectorAll('.admin-nav .nav-item').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                const tabId = e.currentTarget.dataset.tab;
-                document.querySelectorAll('.admin-nav .nav-item').forEach(item => item.classList.remove('active'));
-                document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
-                e.currentTarget.classList.add('active');
-                document.getElementById(tabId).classList.add('active');
-            });
+            tab.addEventListener('click', (e) => this.navigateToTab(e.currentTarget.dataset.tab));
+        });
+
+        // Responsive sidebar
+        document.getElementById('menuToggle').addEventListener('click', () => this.toggleSidebar());
+        document.getElementById('adminMain').addEventListener('click', () => {
+            if (window.innerWidth <= 992) this.closeSidebar();
         });
 
         // Modal events
@@ -59,92 +68,165 @@ const AdminPanel = {
         document.getElementById('images').addEventListener('input', (e) => this.updateImagePreview(e.target.value));
 
         // Table search
-        document.getElementById('productSearchInput').addEventListener('input', (e) => this.filterTable(e.target.value, 'products-table'));
-        document.getElementById('userSearchInput').addEventListener('input', (e) => this.filterTable(e.target.value, 'users-table'));
+        document.getElementById('productSearchInput').addEventListener('input', (e) => this.filterAndRenderProducts(e.target.value));
+        document.getElementById('userSearchInput').addEventListener('input', (e) => this.filterAndRenderUsers(e.target.value));
 
+        // Sorting
+        document.querySelectorAll('#products-table th[data-sort]').forEach(th => th.addEventListener('click', () => this.handleSort('product', th.dataset.sort)));
+        document.querySelectorAll('#users-table th[data-sort]').forEach(th => th.addEventListener('click', () => this.handleSort('user', th.dataset.sort)));
 
         // Event delegation for table actions
-        document.getElementById('products-table-body').addEventListener('click', (e) => {
-            const editBtn = e.target.closest('.btn-edit');
-            const deleteBtn = e.target.closest('.btn-delete');
-            if (editBtn) this.handleEditProduct(editBtn.dataset.id);
-            if (deleteBtn) this.handleDeleteProduct(deleteBtn.dataset.id);
-        });
-        document.getElementById('users-table-body').addEventListener('click', (e) => {
-            // Placeholder for user actions
-        });
+        document.getElementById('products-table-body').addEventListener('click', (e) => this.handleTableActions(e, 'product'));
+        document.getElementById('users-table-body').addEventListener('click', (e) => this.handleTableActions(e, 'user'));
 
         // Logout
         document.getElementById('adminLogout').addEventListener('click', (e) => {
             e.preventDefault();
-            if (window.logout) window.logout();
+            AuthManager.logout();
         });
     },
     
+    // --- DATA FETCHING & RENDERING ---
     async fetchInitialData() {
         this.setLoadingState('products-table-body', 6);
         this.setLoadingState('users-table-body', 5);
         
         try {
             const [productsData, usersData] = await Promise.all([
-                window.callApi('/products?limit=1000', 'GET', null, false),
-                window.callApi('/users', 'GET', null, true) // requires admin auth
+                ApiManager.call('/products?limit=1000', 'GET', null, false),
+                ApiManager.call('/users', 'GET', null, true) // requires admin auth
             ]);
 
             this.products = productsData.data.products;
             this.users = usersData.data.users;
             
-            this.renderProductList();
-            this.renderUserList();
-            this.renderDashboard();
-
+            this.generateActivityFeed();
+            this.renderAll();
         } catch (error) {
-            window.Utils.showToast('Không thể tải dữ liệu ban đầu. ' + error.message, 'error');
+            Utils.showToast('Không thể tải dữ liệu ban đầu. ' + error.message, 'error');
             this.setErrorState('products-table-body', 6, 'Lỗi tải sản phẩm');
             this.setErrorState('users-table-body', 5, 'Lỗi tải người dùng');
         }
     },
-    
+
+    renderAll() {
+        this.renderDashboard();
+        this.filterAndRenderProducts();
+        this.filterAndRenderUsers();
+    },
+
     setLoadingState(tbodyId, colspan) {
         const tbody = document.getElementById(tbodyId);
-        if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="loading-state"><div class="spinner"></div></div></td></tr>`;
-        }
+        if (tbody) tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="loading-state"><div class="spinner"></div></div></td></tr>`;
     },
 
     setErrorState(tbodyId, colspan, message) {
         const tbody = document.getElementById(tbodyId);
-         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${message}</p></div></td></tr>`;
-        }
+        if (tbody) tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><h3><i class="fas fa-exclamation-triangle"></i> ${message}</h3></div></td></tr>`;
     },
 
+    // --- DASHBOARD ---
     renderDashboard() {
         document.getElementById('total-products').textContent = this.products.length;
         document.getElementById('total-users').textContent = this.users.length;
-        
         const totalRevenue = this.products.reduce((sum, p) => sum + (p.sales || 0) * p.price, 0);
-        document.getElementById('total-revenue').textContent = window.Utils.formatPrice(totalRevenue) + 'đ';
+        document.getElementById('total-revenue').textContent = Utils.formatPrice(totalRevenue);
 
-        const topSeller = this.products.reduce((top, p) => (!top || (p.sales || 0) > (top.sales || 0) ? p : top), null);
+        const topSeller = [...this.products].sort((a,b) => (b.sales || 0) - (a.sales || 0))[0];
         if (topSeller) {
             document.getElementById('top-seller').textContent = topSeller.title;
             document.getElementById('top-seller-sales').textContent = `${topSeller.sales || 0} lượt mua`;
         }
+        this.renderActivityFeed();
     },
 
-    renderProductList() {
-        const tableBody = document.getElementById('products-table-body');
-        if (this.products.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><p>Chưa có sản phẩm nào.</p></div></td></tr>`;
+    generateActivityFeed() {
+        const productActivity = this.products
+            .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(0, 5)
+            .map(p => ({ type: 'product', text: `Sản phẩm mới: <strong>${p.title}</strong>`, time: p.createdAt }));
+        
+        const userActivity = this.users
+            .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(0, 5)
+            .map(u => ({ type: 'user', text: `Người dùng mới: <strong>${u.name}</strong>`, time: u.createdAt }));
+            
+        this.activity = [...productActivity, ...userActivity].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
+    },
+
+    renderActivityFeed() {
+        const feedContainer = document.getElementById('activity-feed-content');
+        if (this.activity.length === 0) {
+            feedContainer.innerHTML = `<div class="empty-state" style="padding: 1rem 0;"><p>Chưa có hoạt động nào.</p></div>`;
             return;
         }
+        feedContainer.innerHTML = this.activity.map(item => `
+            <div class="activity-item">
+                <div class="activity-icon ${item.type}">
+                    <i class="fas ${item.type === 'user' ? 'fa-user-plus' : 'fa-plus-circle'}"></i>
+                </div>
+                <div class="activity-text">${item.text}</div>
+                <div class="activity-time">${moment(item.time).fromNow()}</div>
+            </div>
+        `).join('');
+    },
+    
+    // --- TABLE MANAGEMENT (Products & Users) ---
+    filterAndRenderProducts(searchTerm = '') {
+        const filtered = searchTerm
+            ? this.products.filter(p => p.title.toLowerCase().includes(searchTerm.toLowerCase()))
+            : [...this.products];
+        this.renderPaginatedTable('product', filtered);
+    },
 
-        tableBody.innerHTML = this.products.map(p => `
-            <tr data-search-term="${p.title.toLowerCase()}">
-                <td><img src="${p.images[0] || 'https://via.placeholder.com/50'}" alt="${p.title}" class="product-image-thumb"></td>
+    filterAndRenderUsers(searchTerm = '') {
+        const filtered = searchTerm
+            ? this.users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase()))
+            : [...this.users];
+        this.renderPaginatedTable('user', filtered);
+    },
+
+    renderPaginatedTable(type, data) {
+        const sortState = this[`${type}Sort`];
+        const currentPage = this[`${type}CurrentPage`];
+        
+        // Sort data
+        const sortedData = [...data].sort((a, b) => {
+            const valA = a[sortState.column];
+            const valB = b[sortState.column];
+            if (valA < valB) return sortState.order === 'asc' ? -1 : 1;
+            if (valA > valB) return sortState.order === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        // Paginate data
+        const totalItems = sortedData.length;
+        const totalPages = Math.ceil(totalItems / this.itemsPerPage);
+        const startIndex = (currentPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        const paginatedData = sortedData.slice(startIndex, endIndex);
+
+        // Render table body
+        const tableBodyId = `${type}s-table-body`;
+        const renderFunction = type === 'product' ? this.renderProductRow : this.renderUserRow;
+        const tableBody = document.getElementById(tableBodyId);
+        if (paginatedData.length === 0) {
+            const colspan = type === 'product' ? 6 : 5;
+            this.setErrorState(tableBodyId, colspan, 'Không tìm thấy kết quả.');
+        } else {
+            tableBody.innerHTML = paginatedData.map(renderFunction).join('');
+        }
+
+        // Render pagination controls
+        this.renderPagination(type, currentPage, totalPages);
+    },
+    
+    renderProductRow(p) {
+        return `
+            <tr>
+                <td><img src="${p.images?.[0] || 'https://via.placeholder.com/50'}" alt="${p.title}" class="product-image-thumb"></td>
                 <td>${p.title}</td>
-                <td>${window.Utils.formatPrice(p.price)}đ</td>
+                <td>${Utils.formatPrice(p.price)}</td>
                 <td>${p.stock}</td>
                 <td>${p.sales || 0}</td>
                 <td class="actions">
@@ -152,60 +234,212 @@ const AdminPanel = {
                     <button class="btn-delete" data-id="${p._id}" title="Xóa"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
-        `).join('');
+        `;
     },
 
-    renderUserList() {
-        const tableBody = document.getElementById('users-table-body');
-         if (this.users.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><p>Chưa có người dùng nào.</p></div></td></tr>`;
-            return;
-        }
-        
-        tableBody.innerHTML = this.users.map(u => `
-            <tr data-search-term="${u.name.toLowerCase()} ${u.email.toLowerCase()}">
+    renderUserRow(u) {
+        return `
+            <tr>
                 <td>${u.name}</td>
                 <td>${u.email}</td>
-                <td>${u.role}</td>
-                <td>${new Date(u.createdAt).toLocaleDateString('vi-VN')}</td>
+                <td><span class="role-badge ${u.role}">${u.role}</span></td>
+                <td>${Utils.formatDate(u.createdAt)}</td>
                 <td class="actions">
-                   <button class="btn-promote" data-id="${u._id}" title="Thăng cấp Admin"><i class="fas fa-user-shield"></i></button>
+                   <button class="btn-promote" data-id="${u._id}" title="Thăng cấp Admin" ${u.role === 'admin' ? 'disabled' : ''}><i class="fas fa-user-shield"></i></button>
                    <button class="btn-ban" data-id="${u._id}" title="Khóa tài khoản"><i class="fas fa-user-slash"></i></button>
                 </td>
             </tr>
-        `).join('');
+        `;
     },
-    
-    openProductModal(product = null) {
-        const modal = document.getElementById('product-modal');
-        const form = document.getElementById('product-form');
-        const title = document.getElementById('modal-title');
-        
-        form.reset();
-        document.getElementById('image-preview').innerHTML = '';
-        document.getElementById('productId').value = '';
 
-        if (product) {
-            // Edit mode
-            title.textContent = 'Chỉnh Sửa Sản Phẩm';
-            document.getElementById('productId').value = product._id;
-            document.getElementById('title').value = product.title;
-            document.getElementById('category').value = product.category;
-            document.getElementById('price').value = product.price;
-            document.getElementById('oldPrice').value = product.oldPrice || '';
-            document.getElementById('stock').value = product.stock;
-            document.getElementById('badge').value = product.badge || '';
-            document.getElementById('description').value = product.description;
-            document.getElementById('detailedDescription').value = product.detailedDescription || '';
-            const imageUrls = product.images.join(',\n');
-            document.getElementById('images').value = imageUrls;
-            this.updateImagePreview(imageUrls);
-        } else {
-            // Add mode
-            title.textContent = 'Thêm Sản Phẩm Mới';
+    renderPagination(type, currentPage, totalPages) {
+        const container = document.getElementById(`${type}-pagination`);
+        const pageInfo = document.getElementById(`${type}-page-info`);
+        
+        if (totalPages <= 1) {
+            container.innerHTML = '';
+            pageInfo.textContent = '';
+            return;
         }
 
-        modal.style.display = 'flex';
+        container.innerHTML = `
+            <button id="${type}-prev-btn" ${currentPage === 1 ? 'disabled' : ''}>Trước</button>
+            <span>Trang ${currentPage} / ${totalPages}</span>
+            <button id="${type}-next-btn" ${currentPage === totalPages ? 'disabled' : ''}>Sau</button>
+        `;
+        pageInfo.textContent = `Hiển thị ${this.itemsPerPage * (currentPage - 1) + 1} - ${Math.min(this.itemsPerPage * currentPage, this[type + 's'].length)} của ${this[type + 's'].length}`;
+
+        document.getElementById(`${type}-prev-btn`).addEventListener('click', () => this.changePage(type, -1));
+        document.getElementById(`${type}-next-btn`).addEventListener('click', () => this.changePage(type, 1));
+    },
+    
+    changePage(type, direction) {
+        const totalPages = Math.ceil(this[type+'s'].length / this.itemsPerPage);
+        this[`${type}CurrentPage`] += direction;
+        
+        if (this[`${type}CurrentPage`] < 1) this[`${type}CurrentPage`] = 1;
+        if (this[`${type}CurrentPage`] > totalPages) this[`${type}CurrentPage`] = totalPages;
+
+        this[`filterAndRender${type.charAt(0).toUpperCase() + type.slice(1)}s`]();
+    },
+
+    handleSort(type, column) {
+        const sortState = this[`${type}Sort`];
+        if (sortState.column === column) {
+            sortState.order = sortState.order === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortState.column = column;
+            sortState.order = 'asc';
+        }
+        
+        // Reset to first page on new sort
+        this[`${type}CurrentPage`] = 1;
+
+        // Update sort icons
+        const tableId = `${type}s-table`;
+        document.querySelectorAll(`#${tableId} th[data-sort] .sort-icon`).forEach(icon => {
+            icon.className = 'fas fa-sort sort-icon';
+        });
+        const activeTh = document.querySelector(`#${tableId} th[data-sort="${column}"] .sort-icon`);
+        if (activeTh) {
+            activeTh.className = `fas fa-sort-${sortState.order === 'asc' ? 'up' : 'down'} sort-icon`;
+        }
+        
+        this[`filterAndRender${type.charAt(0).toUpperCase() + type.slice(1)}s`]();
+    },
+
+    handleTableActions(e, type) {
+        const id = e.target.closest('button')?.dataset.id;
+        if (!id) return;
+
+        if (e.target.closest('.btn-edit')) this.handleEditProduct(id);
+        if (e.target.closest('.btn-delete')) this.handleDeleteProduct(id);
+        if (e.target.closest('.btn-promote')) this.handlePromoteUser(id);
+        if (e.target.closest('.btn-ban')) this.handleBanUser(id);
+    },
+
+    // --- CRUD & ACTIONS ---
+    async handleProductFormSubmit(e) {
+        e.preventDefault();
+        const productId = document.getElementById('productId').value;
+        const isEditing = !!productId;
+
+        const productData = {
+            title: document.getElementById('title').value.trim(),
+            category: document.getElementById('category').value.trim(),
+            price: parseInt(document.getElementById('price').value, 10),
+            oldPrice: document.getElementById('oldPrice').value ? parseInt(document.getElementById('oldPrice').value, 10) : undefined,
+            stock: parseInt(document.getElementById('stock').value, 10),
+            description: document.getElementById('description').value.trim(),
+            detailedDescription: document.getElementById('detailedDescription').value.trim(),
+            images: document.getElementById('images').value.split(/[, \n]+/).map(url => url.trim()).filter(url => url && Utils.validateURL(url)),
+            badge: document.getElementById('badge').value.trim() || undefined,
+        };
+        
+        if (!productData.title || !productData.price || !productData.stock) {
+            Utils.showToast('Vui lòng điền các trường bắt buộc (Tên, Giá, Kho).', 'error');
+            return;
+        }
+
+        try {
+            const endpoint = isEditing ? `/products/${productId}` : '/products';
+            const method = isEditing ? 'PATCH' : 'POST';
+            
+            await ApiManager.call(endpoint, method, productData, true);
+            
+            Utils.showToast(`Sản phẩm đã được ${isEditing ? 'cập nhật' : 'thêm'} thành công!`, 'success');
+            this.closeProductModal();
+            await this.fetchInitialData();
+        } catch (error) {
+            Utils.showToast(error.message || 'Có lỗi xảy ra.', 'error');
+        }
+    },
+
+    handleEditProduct(id) {
+        const productToEdit = this.products.find(p => p._id === id);
+        if (productToEdit) this.openProductModal(productToEdit);
+    },
+
+    async handleDeleteProduct(id) {
+        if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return;
+        try {
+            await ApiManager.call(`/products/${id}`, 'DELETE', null, true);
+            Utils.showToast('Đã xóa sản phẩm thành công.', 'success');
+            await this.fetchInitialData();
+        } catch (error) {
+            Utils.showToast(error.message || 'Xóa sản phẩm thất bại.', 'error');
+        }
+    },
+
+    async handlePromoteUser(id) {
+        if (!confirm('Bạn có chắc chắn muốn thăng cấp người dùng này thành Admin?')) return;
+        try {
+            // This API endpoint is hypothetical
+            await ApiManager.call(`/users/${id}/promote`, 'PATCH', null, true);
+            Utils.showToast('Đã thăng cấp người dùng.', 'success');
+            await this.fetchInitialData();
+        } catch (error) {
+            Utils.showToast(error.message || 'Thao tác thất bại.', 'error');
+        }
+    },
+
+    async handleBanUser(id) {
+        if (!confirm('Bạn có chắc chắn muốn cấm người dùng này?')) return;
+        try {
+            // This API endpoint is hypothetical
+            await ApiManager.call(`/users/${id}/ban`, 'PATCH', null, true);
+            Utils.showToast('Đã cấm người dùng.', 'success');
+            await this.fetchInitialData();
+        } catch (error) {
+            Utils.showToast(error.message || 'Thao tác thất bại.', 'error');
+        }
+    },
+
+    // --- UI & MODAL ---
+    navigateToTab(tabId) {
+        document.querySelectorAll('.admin-nav .nav-item').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
+        
+        document.querySelector(`.nav-item[data-tab="${tabId}"]`).classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+        
+        document.getElementById('pageTitle').textContent = document.querySelector(`.nav-item[data-tab="${tabId}"] span`).textContent;
+        if (window.innerWidth <= 992) this.closeSidebar();
+    },
+
+    toggleSidebar() {
+        document.getElementById('adminSidebar').classList.toggle('open');
+    },
+
+    closeSidebar() {
+        document.getElementById('adminSidebar').classList.remove('open');
+    },
+
+    openProductModal(product = null) {
+        const form = document.getElementById('product-form');
+        form.reset();
+        document.getElementById('productId').value = '';
+        this.updateImagePreview('');
+
+        if (product) {
+            document.getElementById('modal-title').textContent = 'Chỉnh Sửa Sản Phẩm';
+            document.getElementById('productId').value = product._id;
+            Object.keys(product).forEach(key => {
+                const input = document.getElementById(key);
+                if (input) {
+                    if (key === 'images') {
+                        const imageUrls = product.images.join(',\n');
+                        input.value = imageUrls;
+                        this.updateImagePreview(imageUrls);
+                    } else {
+                        input.value = product[key] || '';
+                    }
+                }
+            });
+        } else {
+            document.getElementById('modal-title').textContent = 'Thêm Sản Phẩm Mới';
+        }
+        document.getElementById('product-modal').style.display = 'flex';
     },
 
     closeProductModal() {
@@ -215,6 +449,7 @@ const AdminPanel = {
     updateImagePreview(urls) {
         const previewContainer = document.getElementById('image-preview');
         previewContainer.innerHTML = '';
+        if (!urls) return;
         const urlArray = urls.split(/[, \n]+/).map(url => url.trim()).filter(url => url);
         urlArray.forEach(url => {
             const img = document.createElement('img');
@@ -224,91 +459,20 @@ const AdminPanel = {
         });
     },
 
-    async handleProductFormSubmit(e) {
-        e.preventDefault();
-        const productId = document.getElementById('productId').value;
-        const isEditing = !!productId;
-
-        const productData = {
-            title: document.getElementById('title').value,
-            category: document.getElementById('category').value,
-            price: parseInt(document.getElementById('price').value, 10),
-            oldPrice: document.getElementById('oldPrice').value ? parseInt(document.getElementById('oldPrice').value, 10) : undefined,
-            stock: parseInt(document.getElementById('stock').value, 10),
-            description: document.getElementById('description').value,
-            detailedDescription: document.getElementById('detailedDescription').value,
-            images: document.getElementById('images').value.split(/[, \n]+/).map(url => url.trim()).filter(url => url),
-            badge: document.getElementById('badge').value || undefined,
-        };
-        
-        // Simple validation
-        if (!productData.title || !productData.price || !productData.stock) {
-            window.Utils.showToast('Vui lòng điền các trường bắt buộc (Tên, Giá, Kho).', 'error');
-            return;
-        }
-
-        try {
-            const endpoint = isEditing ? `/products/${productId}` : '/products';
-            const method = isEditing ? 'PATCH' : 'POST';
-            
-            await window.callApi(endpoint, method, productData);
-            
-            window.Utils.showToast(`Sản phẩm đã được ${isEditing ? 'cập nhật' : 'thêm'} thành công!`, 'success');
-            this.closeProductModal();
-            await this.fetchInitialData(); // Reload all data to reflect changes
-        } catch (error) {
-            window.Utils.showToast(error.message || 'Có lỗi xảy ra.', 'error');
-        }
-    },
-
-    handleEditProduct(id) {
-        const productToEdit = this.products.find(p => p._id === id);
-        if (productToEdit) {
-            this.openProductModal(productToEdit);
-        }
-    },
-
-    async handleDeleteProduct(id) {
-        if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này không? Hành động này không thể hoàn tác.')) {
-            return;
-        }
-        try {
-            await window.callApi(`/products/${id}`, 'DELETE');
-            window.Utils.showToast('Đã xóa sản phẩm thành công.', 'success');
-            await this.fetchInitialData();
-        } catch (error) {
-            window.Utils.showToast(error.message || 'Xóa sản phẩm thất bại.', 'error');
-        }
-    },
-
-    filterTable(searchTerm, tableId) {
-        const lowerCaseSearchTerm = searchTerm.toLowerCase();
-        const table = document.getElementById(tableId);
-        const rows = table.querySelectorAll('tbody tr');
-        
-        rows.forEach(row => {
-            const rowSearchTerm = row.dataset.searchTerm || '';
-            if (rowSearchTerm.includes(lowerCaseSearchTerm)) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
-    },
-
+    // --- WEBSOCKET ---
     setupWebSocket() {
         try {
-            this.socket = io(this.socketUrl, { autoConnect: false }); // Do not connect automatically
-            if (this.socket) {
-                this.socket.connect();
-                this.socket.on('connect', () => {
-                    console.log('Admin connected to WebSocket Server.');
-                    window.Utils.showToast('Hệ thống thông báo sẵn sàng!', 'info');
-                });
-                this.socket.on('connect_error', () => {
-                     window.Utils.showToast('Không thể kết nối server thông báo!', 'error');
-                });
+            if (typeof io === 'undefined') {
+                console.warn("Socket.IO library not found. Broadcast feature disabled.");
+                return;
             }
+            this.socket = io(CONFIG.API_BASE_URL.replace('/api/v1','')); 
+            this.socket.on('connect', () => {
+                Utils.showToast('Hệ thống thông báo sẵn sàng!', 'info');
+            });
+            this.socket.on('connect_error', () => {
+                Utils.showToast('Không thể kết nối server thông báo!', 'error');
+            });
         } catch (e) {
             console.error("Lỗi khởi tạo WebSocket:", e.message);
         }
@@ -320,13 +484,27 @@ const AdminPanel = {
         const message = messageInput.value.trim();
         if (message && this.socket && this.socket.connected) {
             this.socket.emit('admin_broadcast', { message });
-            window.Utils.showToast('Đã gửi thông báo!', 'success');
+            Utils.showToast('Đã gửi thông báo!', 'success');
             messageInput.value = '';
         } else if (!this.socket || !this.socket.connected) {
-            window.Utils.showToast('Chưa kết nối đến server thông báo.', 'error');
+            Utils.showToast('Chưa kết nối đến server thông báo.', 'error');
         }
     }
 };
 
-// Start the admin panel initialization process
+// --- Moment.js simplified 'fromNow' ---
+const moment = (dateString) => ({
+    fromNow: () => {
+        const diff = new Date() - new Date(dateString);
+        const seconds = Math.floor(diff / 1000);
+        if (seconds < 60) return `${seconds} giây trước`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes} phút trước`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours} giờ trước`;
+        const days = Math.floor(hours / 24);
+        return `${days} ngày trước`;
+    }
+});
+
 AdminPanel.init();
