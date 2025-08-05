@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Admin Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug-info { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .error { color: red; }
+        .success { color: green; }
+        input, button { margin: 5px; padding: 8px; }
+    </style>
+</head>
+<body>
+    <h1>Debug Admin Login</h1>
+    
+    <div class="debug-info">
+        <h3>CONFIG Info:</h3>
+        <div id="config-info">Loading...</div>
+    </div>
+    
+    <div class="debug-info">
+        <h3>AuthManager Status:</h3>
+        <div id="auth-status">Loading...</div>
+    </div>
+    
+    <div class="debug-info">
+        <h3>Test Login:</h3>
+        <input type="email" id="test-email" placeholder="Email" value="chinhan20917976549a@gmail.com">
+        <input type="password" id="test-password" placeholder="Password" value="test123">
+        <button onclick="testLogin()">Test Login</button>
+        <div id="login-result"></div>
+    </div>
+    
+    <div class="debug-info">
+        <h3>Local Storage:</h3>
+        <div id="storage-info">Loading...</div>
+        <button onclick="clearStorage()">Clear Storage</button>
+    </div>
+
+    <script src="main.js"></script>
+    <script>
+        function updateDebugInfo() {
+            // CONFIG Info
+            const configInfo = document.getElementById('config-info');
+            if (window.CONFIG) {
+                configInfo.innerHTML = `
+                    <p><strong>API_BASE_URL:</strong> ${CONFIG.API_BASE_URL}</p>
+                    <p><strong>STORAGE_KEYS.TOKEN:</strong> ${CONFIG.STORAGE_KEYS?.TOKEN}</p>
+                    <p><strong>AUTHORIZED_EMAILS:</strong> ${CONFIG.AUTHORIZED_EMAILS?.join(', ')}</p>
+                `;
+            } else {
+                configInfo.innerHTML = '<p class="error">CONFIG not found!</p>';
+            }
+            
+            // AuthManager Status
+            const authStatus = document.getElementById('auth-status');
+            if (window.AuthManager) {
+                authStatus.innerHTML = '<p class="success">AuthManager loaded successfully</p>';
+            } else {
+                authStatus.innerHTML = '<p class="error">AuthManager not found!</p>';
+            }
+            
+            // Storage Info
+            const storageInfo = document.getElementById('storage-info');
+            const token = localStorage.getItem(CONFIG?.STORAGE_KEYS?.TOKEN || 'gag_token');
+            const user = localStorage.getItem(CONFIG?.STORAGE_KEYS?.USER || 'gag_user');
+            storageInfo.innerHTML = `
+                <p><strong>Token:</strong> ${token ? 'Present' : 'Not found'}</p>
+                <p><strong>User:</strong> ${user ? 'Present' : 'Not found'}</p>
+            `;
+        }
+        
+        async function testLogin() {
+            const email = document.getElementById('test-email').value;
+            const password = document.getElementById('test-password').value;
+            const result = document.getElementById('login-result');
+            
+            if (!window.AuthManager) {
+                result.innerHTML = '<p class="error">AuthManager not available!</p>';
+                return;
+            }
+            
+            try {
+                result.innerHTML = '<p>Logging in...</p>';
+                const user = await window.AuthManager.login(email, password);
+                result.innerHTML = `<p class="success">Login successful! User: ${user.name || user.email}</p>`;
+                updateDebugInfo();
+            } catch (error) {
+                result.innerHTML = `<p class="error">Login failed: ${error.message}</p>`;
+            }
+        }
+        
+        function clearStorage() {
+            localStorage.clear();
+            updateDebugInfo();
+        }
+        
+        // Update info on load
+        setTimeout(updateDebugInfo, 1000);
+    </script>
+</body>
+</html>
