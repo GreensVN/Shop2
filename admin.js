@@ -5,8 +5,8 @@
  * Đã sửa tất cả bug đăng nhập và tương thích hoàn toàn
  */
 
-// Backend Configuration
-const CONFIG = {
+// Backend Configuration - Tạo CONFIG riêng cho admin
+const ADMIN_CONFIG = {
     API_BASE_URL: 'https://shop-4mlk.onrender.com/api/v1',
     SOCKET_URL: 'https://shop-4mlk.onrender.com',
     AUTHORIZED_EMAILS: [
@@ -34,8 +34,8 @@ const CONFIG = {
     }
 };
 
-// Make CONFIG available globally
-window.CONFIG = CONFIG;
+// Sử dụng CONFIG riêng cho admin
+const CONFIG = ADMIN_CONFIG;
 
 const AdminPanel = {
     // --- STATE ---
@@ -562,6 +562,13 @@ const AdminPanel = {
     },
 
     showToast(message, type = 'info') {
+        // Sử dụng Utils.showToast từ main.js nếu có
+        if (window.Utils && window.Utils.showToast) {
+            window.Utils.showToast(message, type);
+            return;
+        }
+        
+        // Fallback nếu Utils không có
         // Remove existing toasts
         document.querySelectorAll('.admin-toast').forEach(toast => toast.remove());
 
@@ -1343,20 +1350,22 @@ const AdminPanel = {
 // Make AdminPanel available globally
 window.AdminPanel = AdminPanel;
 
-// Initialize AdminPanel
-try {
-    console.log('Initializing AdminPanel...');
-    AdminPanel.init();
-    console.log('AdminPanel initialized successfully');
-} catch (error) {
-    console.error('Error initializing AdminPanel:', error);
-    
-    // Fallback initialization
-    setTimeout(() => {
-        try {
-            AdminPanel.init();
-        } catch (retryError) {
-            console.error('AdminPanel retry initialization failed:', retryError);
-        }
-    }, 1000);
-}
+// Initialize AdminPanel - Chạy ngay khi script load
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        console.log('Initializing AdminPanel...');
+        AdminPanel.init();
+        console.log('AdminPanel initialized successfully');
+    } catch (error) {
+        console.error('Error initializing AdminPanel:', error);
+        
+        // Fallback initialization
+        setTimeout(() => {
+            try {
+                AdminPanel.init();
+            } catch (retryError) {
+                console.error('AdminPanel retry initialization failed:', retryError);
+            }
+        }, 1000);
+    }
+});
