@@ -9,6 +9,12 @@
 const CONFIG = {
     API_BASE_URL: 'https://shop-4mlk.onrender.com/api/v1',
     SOCKET_URL: 'https://shop-4mlk.onrender.com/api/v1',
+    AUTHORIZED_EMAILS: [
+        'chinhan20917976549a@gmail.com',
+        'ryantran149@gmail.com',
+        'seller@shopgrowgarden.com',
+        'greensvn@gmail.com'
+    ],
     STORAGE_KEYS: {
         TOKEN: 'gag_token',
         USER: 'gag_user',
@@ -39,6 +45,7 @@ const AdminPanel = {
     currentUser: null,
     socket: null,
     isInitialized: false,
+    isLoading: false,
 
     // Pagination State
     productCurrentPage: 1,
@@ -51,7 +58,9 @@ const AdminPanel = {
 
     // --- INITIALIZATION ---
     init() {
+        console.log('AdminPanel.init() called');
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOMContentLoaded event fired');
             this.bindEvents();
             this.checkAuthAndToggleView();
         });
@@ -66,17 +75,17 @@ const AdminPanel = {
         const errorMessage = document.getElementById('login-error-message');
 
         if (this.currentUser && this.currentUser.role === 'admin') {
-            if (loginContainer) loginContainer.style.display = 'none';
-            if (sidebar) sidebar.style.display = 'flex';
-            if (mainContent) mainContent.style.display = 'block';
+            this.showElement(loginContainer, false);
+            this.showElement(sidebar, true);
+            this.showElement(mainContent, true);
 
             if (!this.isInitialized) {
                 this.setupPanel();
             }
         } else {
-            if (loginContainer) loginContainer.style.display = 'flex';
-            if (sidebar) sidebar.style.display = 'none';
-            if (mainContent) mainContent.style.display = 'none';
+            this.showElement(loginContainer, true);
+            this.showElement(sidebar, false);
+            this.showElement(mainContent, false);
 
             if (this.currentUser && errorMessage) {
                 errorMessage.textContent = 'Truy cập bị từ chối. Yêu cầu quyền Admin.';
@@ -85,6 +94,11 @@ const AdminPanel = {
             }
             this.isInitialized = false;
         }
+    },
+
+    showElement(element, show) {
+        if (!element) return;
+        element.style.display = show ? (element.id === 'adminSidebar' ? 'flex' : 'block') : 'none';
     },
 
     setupPanel() {
@@ -183,15 +197,15 @@ const AdminPanel = {
             imagesInput.addEventListener('input', (e) => this.updateImagePreview(e.target.value));
         }
 
-        // Search inputs
+        // Search inputs with debounce
         const productSearchInput = document.getElementById('productSearchInput');
         if (productSearchInput) {
-            productSearchInput.addEventListener('input', (e) => this.filterAndRenderProducts(e.target.value));
+            productSearchInput.addEventListener('input', this.debounce((e) => this.filterAndRenderProducts(e.target.value), 300));
         }
 
         const userSearchInput = document.getElementById('userSearchInput');
         if (userSearchInput) {
-            userSearchInput.addEventListener('input', (e) => this.filterAndRenderUsers(e.target.value));
+            userSearchInput.addEventListener('input', this.debounce((e) => this.filterAndRenderUsers(e.target.value), 300));
         }
 
         // Sorting
@@ -226,22 +240,57 @@ const AdminPanel = {
         }
     },
 
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    },
+
     async handleAdminLogin(e) {
         e.preventDefault();
+        console.log('handleAdminLogin called');
+        
         const emailInput = document.getElementById('admin-email');
         const passwordInput = document.getElementById('admin-password');
         const errorMessage = document.getElementById('login-error-message');
         const submitBtn = e.target.querySelector('.btn-login');
 
-        if (!emailInput || !passwordInput || !submitBtn) return;
+        console.log('Form elements:', { emailInput, passwordInput, errorMessage, submitBtn });
+
+        if (!emailInput || !passwordInput || !submitBtn) {
+            console.error('Missing form elements');
+            return;
+        }
+
+        // Validation
+        if (!emailInput.value.trim()) {
+            errorMessage.textContent = 'Vui lòng nhập email.';
+            return;
+        }
+
+        if (!passwordInput.value.trim()) {
+            errorMessage.textContent = 'Vui lòng nhập mật khẩu.';
+            return;
+        }
+
+        console.log('Attempting login with:', { email: emailInput.value, password: passwordInput.value });
 
         errorMessage.textContent = '';
         submitBtn.disabled = true;
         submitBtn.textContent = 'Đang đăng nhập...';
 
         try {
+            console.log('Calling AuthManager.login...');
             await window.AuthManager.login(emailInput.value, passwordInput.value);
+            console.log('Login successful');
         } catch (error) {
+            console.error('Login error:', error);
             errorMessage.textContent = error?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
         } finally {
             submitBtn.disabled = false;
@@ -250,6 +299,9 @@ const AdminPanel = {
     },
 
     async fetchInitialData() {
+        if (this.isLoading) return;
+        
+        this.isLoading = true;
         this.setLoadingState('products-table-body', 6);
         this.setLoadingState('users-table-body', 5);
 
@@ -268,6 +320,8 @@ const AdminPanel = {
             this.showToast('Không thể tải dữ liệu quản trị. ' + (error?.message || ''), 'error');
             this.setErrorState('products-table-body', 6, 'Lỗi tải sản phẩm');
             this.setErrorState('users-table-body', 5, 'Lỗi tải người dùng');
+        } finally {
+            this.isLoading = false;
         }
     },
 
@@ -282,7 +336,7 @@ const AdminPanel = {
         };
 
         if (requireAuth) {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN);
             if (!token) {
                 throw new Error('Không có token xác thực');
             }
@@ -304,7 +358,9 @@ const AdminPanel = {
     },
 
     showToast(message, type = 'info') {
-        // Simple toast implementation
+        // Remove existing toasts
+        document.querySelectorAll('.toast').forEach(toast => toast.remove());
+
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
         toast.textContent = message;
@@ -319,6 +375,9 @@ const AdminPanel = {
             font-size: 14px;
             max-width: 300px;
             word-wrap: break-word;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
         `;
 
         switch (type) {
@@ -338,16 +397,20 @@ const AdminPanel = {
 
         document.body.appendChild(toast);
 
+        // Animate in
         setTimeout(() => {
-            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(0)';
+        }, 10);
+
+        // Auto remove
+        setTimeout(() => {
             toast.style.transform = 'translateX(100%)';
-            toast.style.transition = 'all 0.3s ease';
             setTimeout(() => {
                 if (toast.parentNode) {
                     toast.parentNode.removeChild(toast);
                 }
             }, 300);
-        }, 3000);
+        }, CONFIG.TOAST_DURATION);
     },
 
     // Utility Methods
@@ -377,6 +440,40 @@ const AdminPanel = {
         } catch {
             return false;
         }
+    },
+
+    validateProductData(data) {
+        const errors = [];
+
+        if (!data.title || data.title.trim().length < CONFIG.PRODUCT_VALIDATION.TITLE_MIN) {
+            errors.push(`Tiêu đề phải có ít nhất ${CONFIG.PRODUCT_VALIDATION.TITLE_MIN} ký tự`);
+        }
+
+        if (data.title && data.title.trim().length > CONFIG.PRODUCT_VALIDATION.TITLE_MAX) {
+            errors.push(`Tiêu đề không được vượt quá ${CONFIG.PRODUCT_VALIDATION.TITLE_MAX} ký tự`);
+        }
+
+        if (!data.price || isNaN(data.price) || data.price < CONFIG.PRODUCT_VALIDATION.PRICE_MIN) {
+            errors.push(`Giá phải từ ${this.formatPrice(CONFIG.PRODUCT_VALIDATION.PRICE_MIN)} trở lên`);
+        }
+
+        if (data.price && data.price > CONFIG.PRODUCT_VALIDATION.PRICE_MAX) {
+            errors.push(`Giá không được vượt quá ${this.formatPrice(CONFIG.PRODUCT_VALIDATION.PRICE_MAX)}`);
+        }
+
+        if (!data.stock || isNaN(data.stock) || data.stock < 0) {
+            errors.push('Số lượng tồn kho phải là số dương');
+        }
+
+        if (data.description && data.description.trim().length < CONFIG.PRODUCT_VALIDATION.DESC_MIN) {
+            errors.push(`Mô tả phải có ít nhất ${CONFIG.PRODUCT_VALIDATION.DESC_MIN} ký tự`);
+        }
+
+        if (data.oldPrice && (isNaN(data.oldPrice) || data.oldPrice <= data.price)) {
+            errors.push('Giá cũ phải lớn hơn giá hiện tại');
+        }
+
+        return errors;
     },
 
     renderAll() {
@@ -434,8 +531,8 @@ const AdminPanel = {
             if (topSellerEl) topSellerEl.textContent = topSeller.title;
             if (topSellerSalesEl) topSellerSalesEl.textContent = `${topSeller.sales || 0} lượt mua`;
         } else {
-            if (topSellerEl) topSellerEl.textContent = '';
-            if (topSellerSalesEl) topSellerSalesEl.textContent = '';
+            if (topSellerEl) topSellerEl.textContent = 'Chưa có dữ liệu';
+            if (topSellerSalesEl) topSellerSalesEl.textContent = '0 lượt mua';
         }
 
         this.renderActivityFeed();
@@ -564,7 +661,8 @@ const AdminPanel = {
                 <td>
                     <img src="${this.sanitizeInput((p.images && p.images[0]) || 'https://via.placeholder.com/50x50?text=No+Img')}" 
                          alt="${this.sanitizeInput(p.title)}" 
-                         class="product-image-thumb">
+                         class="product-image-thumb"
+                         onerror="this.src='https://via.placeholder.com/50x50?text=Error'">
                 </td>
                 <td>${this.sanitizeInput(p.title)}</td>
                 <td>${this.formatPrice(p.price)}</td>
@@ -718,8 +816,10 @@ const AdminPanel = {
             badge: getValue('badge').trim() || undefined,
         };
 
-        if (!productData.title || isNaN(productData.price) || isNaN(productData.stock)) {
-            this.showToast('Vui lòng điền các trường bắt buộc (*).', 'error');
+        // Validation
+        const validationErrors = this.validateProductData(productData);
+        if (validationErrors.length > 0) {
+            this.showToast(validationErrors.join('. '), 'error');
             submitBtn.disabled = false;
             return;
         }
@@ -904,7 +1004,8 @@ const AdminPanel = {
             }
             
             this.socket = io(CONFIG.SOCKET_URL, { 
-                transports: ['websocket'] 
+                transports: ['websocket'],
+                timeout: 5000
             });
 
             this.socket.on('connect', () => {
@@ -919,6 +1020,11 @@ const AdminPanel = {
                 const broadcastBtn = document.querySelector('#broadcastForm button');
                 if (broadcastBtn) broadcastBtn.disabled = true;
             });
+
+            this.socket.on('disconnect', () => {
+                const broadcastBtn = document.querySelector('#broadcastForm button');
+                if (broadcastBtn) broadcastBtn.disabled = true;
+            });
         } catch (e) {
             console.error("Lỗi khởi tạo WebSocket:", e?.message);
         }
@@ -928,6 +1034,11 @@ const AdminPanel = {
         e.preventDefault();
         const messageInput = document.getElementById('broadcastMessage');
         const message = messageInput ? messageInput.value.trim() : '';
+        
+        if (!message) {
+            this.showToast('Vui lòng nhập nội dung thông báo.', 'warning');
+            return;
+        }
         
         if (message && this.socket?.connected) {
             this.socket.emit('admin_broadcast', { message });
