@@ -546,23 +546,20 @@ const AdminPanel = {
     
     // --- UTILITIES ---
     moment(dateString) {
-        return {
-            fromNow: () => {
-                const diff = new Date() - new Date(dateString);
-                const seconds = Math.floor(diff / 1000);
-                if (seconds < 2) return "vài giây trước";
-                if (seconds < 60) return `${seconds} giây trước`;
-                const minutes = Math.floor(seconds / 60);
-                if (minutes < 2) return "1 phút trước";
-                if (minutes < 60) return `${minutes} phút trước`;
-                const hours = Math.floor(minutes / 60);
-                if (hours < 2) return "1 giờ trước";
-                if (hours < 24) return `${hours} giờ trước`;
-                const days = Math.floor(hours / 24);
-                if (days < 2) return "1 ngày trước";
-                return `${days} ngày trước`;
-            }
-        }
+        // Simple moment.js 'fromNow' alternative
+        const diff = new Date() - new Date(dateString);
+        const seconds = Math.floor(diff / 1000);
+        if (seconds < 2) return "vài giây trước";
+        if (seconds < 60) return `${seconds} giây trước`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 2) return "1 phút trước";
+        if (minutes < 60) return `${minutes} phút trước`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 2) return "1 giờ trước";
+        if (hours < 24) return `${hours} giờ trước`;
+        const days = Math.floor(hours / 24);
+        if (days < 2) return "1 ngày trước";
+        return `${days} ngày trước`;
     }
 };
 
