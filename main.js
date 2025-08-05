@@ -62,7 +62,7 @@ class Utils {
             container = document.createElement('div');
             container.id = 'toastContainer';
             Object.assign(container.style, {
-                position: 'fixed', top: '20px', right: '20px', zIndex: '10003'
+                position: 'fixed', top: '20px', right: '20px', zIndex: '10003', display: 'flex', flexDirection: 'column', gap: '10px'
             });
             document.body.appendChild(container);
         }
@@ -73,14 +73,14 @@ class Utils {
         const toast = document.createElement('div');
         const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle', warning: 'fa-exclamation-triangle' };
         const colors = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' };
-        toast.innerHTML = `<div style="display: flex; align-items: center;"><i class="fas ${icons[type] || icons.info}" style="margin-right: 8px;"></i><span>${message}</span></div><button class="toast-close" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer; margin-left: 10px;">×</button>`;
-        Object.assign(toast.style, { background: colors[type] || colors.info, color: 'white', padding: '12px 20px', borderRadius: '8px', marginBottom: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', transform: 'translateX(100%)', opacity: '0', transition: 'all 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'space-between', minWidth: '300px', zIndex: '9999' });
+        toast.innerHTML = `<div style="display: flex; align-items: center;"><i class="fas ${icons[type] || icons.info}" style="margin-right: 8px;"></i><span>${message}</span></div><button class="toast-close" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer; margin-left: 10px; padding: 0;">×</button>`;
+        Object.assign(toast.style, { background: colors[type] || colors.info, color: 'white', padding: '12px 20px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', transform: 'translateX(120%)', opacity: '0', transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', minWidth: '300px', zIndex: '9999' });
         return toast;
     }
 
     static animateToast(toast, duration) {
         requestAnimationFrame(() => { toast.style.transform = 'translateX(0)'; toast.style.opacity = '1'; });
-        const closeToast = () => { toast.style.transform = 'translateX(100%)'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); };
+        const closeToast = () => { toast.style.transform = 'translateX(120%)'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); };
         const timer = setTimeout(closeToast, duration);
         toast.querySelector('.toast-close').addEventListener('click', () => { clearTimeout(timer); closeToast(); });
     }
@@ -93,7 +93,11 @@ class Utils {
         if (element) element.innerHTML = `<div class="error-state" style="text-align: center; padding: 50px; color: #ef4444; grid-column: 1 / -1;"><i class="fas fa-exclamation-triangle fa-2x"></i><p style="margin-top: 10px;">${message}</p></div>`;
     }
 
-    static sanitizeInput(input) { return input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').replace(/javascript:/gi, '').replace(/on\w+\s*=/gi, ''); }
+    static sanitizeInput(input) {
+        const temp = document.createElement('div');
+        temp.textContent = input;
+        return temp.innerHTML;
+    }
     static validateURL(url) { try { new URL(url); return true; } catch { return false; } }
 }
 
@@ -207,7 +211,7 @@ class AuthManager {
         if (token) {
             try {
                 const data = await ApiManager.call('/users/me'); currentUser = data.data.user;
-                if (!currentUser.email) throw new Error('Invalid user data');
+                if (!currentUser?.email) throw new Error('Invalid user data');
                 localStorage.setItem(CONFIG.STORAGE_KEYS.USER, JSON.stringify(currentUser));
                 await AuthManager.updateUIAfterLogin();
             } catch (error) {
@@ -217,6 +221,7 @@ class AuthManager {
         } else { AuthManager.updateUIAfterLogout(); }
     }
     static getDisplayName(user) { if (!user) return 'User'; if (user.name?.trim()) return user.name.trim(); if (user.email?.includes('@')) return user.email.split('@')[0]; return 'User'; }
+    
     static async updateUIAfterLogin() {
         if (!currentUser) return;
         const loginButton = document.getElementById('loginButton'); const userDropdown = document.getElementById('userDropdown');
@@ -225,20 +230,17 @@ class AuthManager {
         document.querySelectorAll('.user-name, #userName').forEach(el => { if (el) el.textContent = displayName; });
         document.querySelectorAll('.user-avatar, #userAvatar').forEach(el => { if (el) el.textContent = firstLetter; });
         await CartManager.updateCount(); FloatingButtonsManager.update();
-        // <<< FIX START >>>
-        // Thông báo cho toàn bộ ứng dụng rằng trạng thái đăng nhập đã thay đổi
+        // *** CRITICAL FIX: Announce authentication change to the entire application ***
         document.dispatchEvent(new CustomEvent('authChange', { detail: { user: currentUser } }));
-        // <<< FIX END >>>
     }
+
     static updateUIAfterLogout() {
         const loginButton = document.getElementById('loginButton'); const userDropdown = document.getElementById('userDropdown');
         if (loginButton) loginButton.style.display = 'flex'; if (userDropdown) userDropdown.style.display = 'none';
         document.querySelectorAll('.cart-count, #cartCount').forEach(el => { el.textContent = '0'; el.style.display = 'none'; });
         FloatingButtonsManager.update();
-        // <<< FIX START >>>
-        // Thông báo cho toàn bộ ứng dụng rằng trạng thái đăng nhập đã thay đổi
+        // *** CRITICAL FIX: Announce authentication change to the entire application ***
         document.dispatchEvent(new CustomEvent('authChange', { detail: { user: null } }));
-        // <<< FIX END >>>
     }
 }
 
@@ -348,12 +350,6 @@ class App {
         const path = window.location.pathname.split("/").pop() || 'index.html';
         switch (path) {
             case 'index.html': case '': await App.initIndexPage(); break;
-            // No specific init needed for these pages as main.js handles auth check
-            // case 'account.html':
-            // case 'cart.html':
-            // case 'favorite.html':
-            // case 'admin.html':
-            // break;
         }
     }
     static async initIndexPage() {
@@ -372,6 +368,7 @@ window.Utils = Utils; window.CartManager = CartManager; window.FavoriteManager =
 window.PermissionManager = PermissionManager; window.ProductManager = ProductManager; window.StorageManager = StorageManager;
 window.ApiManager = ApiManager;
 window.AuthManager = AuthManager; // Export AuthManager
+window.currentUser = currentUser; // Export global currentUser
 
 window.updateAllFavoriteButtons = async () => {
     if (!currentUser) return; try { const favorites = await FavoriteManager.get(); favorites.forEach(fav => FavoriteManager.updateStatus(fav.product?._id || fav.productId, true)); } catch {}
