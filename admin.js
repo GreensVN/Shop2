@@ -7,8 +7,8 @@ const AdminPanel = {
     activity: [],
     currentUser: null,
     socket: null,
-    isInitialized: false, // Flag để tránh khởi tạo lại
-    
+    isInitialized: false,
+
     // Pagination State
     productCurrentPage: 1,
     userCurrentPage: 1,
@@ -21,60 +21,78 @@ const AdminPanel = {
     // --- INITIALIZATION ---
     init() {
         document.addEventListener('DOMContentLoaded', () => {
-            // Gắn các sự kiện ngay lập tức
-            this.bindEvents(); 
-            // Kiểm tra quyền ban đầu (có thể currentUser chưa có sẵn)
-            this.checkAuthAndToggleView(); 
+            // Bind events immediately, including the crucial authChange listener
+            this.bindEvents();
+            // Perform an initial check. The authChange event will correct the view if needed.
+            this.checkAuthAndToggleView();
         });
     },
 
+    /**
+     * Checks user's authentication and role, then shows/hides the admin panel accordingly.
+     * This function is the single source of truth for UI visibility.
+     */
     checkAuthAndToggleView() {
-        // Luôn lấy đối tượng người dùng mới nhất từ global scope của main.js
-        this.currentUser = window.currentUser; 
+        // Always get the latest user object from the global scope (managed by main.js)
+        this.currentUser = window.currentUser;
+
+        const loginContainer = document.getElementById('admin-login-container');
+        const sidebar = document.getElementById('adminSidebar');
+        const mainContent = document.getElementById('adminMain');
+        const errorMessage = document.getElementById('login-error-message');
 
         if (this.currentUser && this.currentUser.role === 'admin') {
-            // Người dùng là admin, hiển thị panel
-            document.getElementById('admin-login-container').style.display = 'none';
-            document.getElementById('adminSidebar').style.display = 'flex';
-            document.getElementById('adminMain').style.display = 'block';
-            
-            // Chỉ khởi tạo panel nếu chưa được khởi tạo
-            this.setupPanel(); 
-        } else {
-            // Người dùng không phải admin hoặc chưa đăng nhập, hiển thị form đăng nhập
-            document.getElementById('admin-login-container').style.display = 'flex';
-            document.getElementById('adminSidebar').style.display = 'none';
-            document.getElementById('adminMain').style.display = 'none';
-            
-            if (this.currentUser) { // Đã đăng nhập nhưng không phải admin
-                document.getElementById('login-error-message').textContent = 'Truy cập bị từ chối. Yêu cầu quyền Admin.';
-            } else {
-                document.getElementById('login-error-message').textContent = '';
+            // User is an admin, show the panel
+            if(loginContainer) loginContainer.style.display = 'none';
+            if(sidebar) sidebar.style.display = 'flex';
+            if(mainContent) mainContent.style.display = 'block';
+
+            // Setup the panel only if it hasn't been initialized before
+            if (!this.isInitialized) {
+                this.setupPanel();
             }
+        } else {
+            // User is not an admin or not logged in, show the login form
+            if(loginContainer) loginContainer.style.display = 'flex';
+            if(sidebar) sidebar.style.display = 'none';
+            if(mainContent) mainContent.style.display = 'none';
+            
+            if (this.currentUser) { // Logged in, but not an admin
+                 if(errorMessage) errorMessage.textContent = 'Truy cập bị từ chối. Yêu cầu quyền Admin.';
+            } else { // Not logged in
+                 if(errorMessage) errorMessage.textContent = '';
+            }
+            // Reset initialization flag if the user logs out
+            this.isInitialized = false;
         }
     },
-    
-    setupPanel() {
-        // Không khởi tạo lại nếu đã làm rồi
-        if (this.isInitialized) return; 
 
-        document.getElementById('adminName').textContent = this.currentUser.name || 'Admin';
+    /**
+     * Sets up the main panel functionality once.
+     */
+    setupPanel() {
+        if (this.isInitialized) return;
+
+        const adminName = document.getElementById('adminName');
+        if(adminName) adminName.textContent = this.currentUser.name || 'Admin';
+
         this.fetchInitialData();
         this.setupWebSocket();
         this.navigateToTab('dashboard-tab');
         this.isInitialized = true;
     },
 
+    /**
+     * Binds all event listeners.
+     */
     bindEvents() {
-        // <<< FIX START >>>
-        // Lắng nghe sự kiện thay đổi trạng thái đăng nhập từ main.js
+        // *** CRITICAL FIX: Listen for authentication state changes from main.js ***
         document.addEventListener('authChange', (event) => {
-            this.currentUser = event.detail.user; // Cập nhật người dùng từ sự kiện
-            this.checkAuthAndToggleView(); // Kiểm tra lại giao diện
+            this.currentUser = event.detail.user; // Update user from the event
+            this.checkAuthAndToggleView(); // Re-evaluate the entire view
         });
-        // <<< FIX END >>>
 
-        // Form đăng nhập
+        // Login Form
         const loginForm = document.getElementById('admin-login-form');
         if (loginForm) loginForm.addEventListener('submit', (e) => this.handleAdminLogin(e));
 
@@ -84,48 +102,71 @@ const AdminPanel = {
         });
 
         // Responsive sidebar
-        document.getElementById('menuToggle').addEventListener('click', () => this.toggleSidebar());
-        document.getElementById('adminMain').addEventListener('click', () => {
+        const menuToggle = document.getElementById('menuToggle');
+        if(menuToggle) menuToggle.addEventListener('click', () => this.toggleSidebar());
+
+        const adminMain = document.getElementById('adminMain');
+        if(adminMain) adminMain.addEventListener('click', () => {
             if (window.innerWidth <= 992) this.closeSidebar();
         });
 
         // Modal events
-        document.getElementById('addProductBtn').addEventListener('click', () => this.openProductModal());
-        document.getElementById('close-modal-btn').addEventListener('click', () => this.closeProductModal());
-        document.getElementById('cancel-btn').addEventListener('click', () => this.closeProductModal());
-        document.getElementById('product-modal').addEventListener('click', (e) => {
+        const addProductBtn = document.getElementById('addProductBtn');
+        if(addProductBtn) addProductBtn.addEventListener('click', () => this.openProductModal());
+
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        if(closeModalBtn) closeModalBtn.addEventListener('click', () => this.closeProductModal());
+
+        const cancelBtn = document.getElementById('cancel-btn');
+        if(cancelBtn) cancelBtn.addEventListener('click', () => this.closeProductModal());
+
+        const productModal = document.getElementById('product-modal');
+        if(productModal) productModal.addEventListener('click', (e) => {
             if (e.target.id === 'product-modal') this.closeProductModal();
         });
 
         // Form submissions
-        document.getElementById('product-form').addEventListener('submit', (e) => this.handleProductFormSubmit(e));
-        document.getElementById('broadcastForm').addEventListener('submit', (e) => this.handleBroadcastSubmit(e));
+        const productForm = document.getElementById('product-form');
+        if(productForm) productForm.addEventListener('submit', (e) => this.handleProductFormSubmit(e));
         
+        const broadcastForm = document.getElementById('broadcastForm');
+        if(broadcastForm) broadcastForm.addEventListener('submit', (e) => this.handleBroadcastSubmit(e));
+
         // Image preview
-        document.getElementById('images').addEventListener('input', (e) => this.updateImagePreview(e.target.value));
+        const imagesInput = document.getElementById('images');
+        if(imagesInput) imagesInput.addEventListener('input', (e) => this.updateImagePreview(e.target.value));
 
         // Table search
-        document.getElementById('productSearchInput').addEventListener('input', (e) => this.filterAndRenderProducts(e.target.value));
-        document.getElementById('userSearchInput').addEventListener('input', (e) => this.filterAndRenderUsers(e.target.value));
+        const productSearchInput = document.getElementById('productSearchInput');
+        if(productSearchInput) productSearchInput.addEventListener('input', (e) => this.filterAndRenderProducts(e.target.value));
+        
+        const userSearchInput = document.getElementById('userSearchInput');
+        if(userSearchInput) userSearchInput.addEventListener('input', (e) => this.filterAndRenderUsers(e.target.value));
 
         // Sorting
         document.querySelectorAll('#products-table th[data-sort]').forEach(th => th.addEventListener('click', () => this.handleSort('product', th.dataset.sort)));
         document.querySelectorAll('#users-table th[data-sort]').forEach(th => th.addEventListener('click', () => this.handleSort('user', th.dataset.sort)));
 
         // Event delegation for table actions
-        document.getElementById('products-table-body').addEventListener('click', (e) => this.handleTableActions(e, 'product'));
-        document.getElementById('users-table-body').addEventListener('click', (e) => this.handleTableActions(e, 'user'));
+        const productsTableBody = document.getElementById('products-table-body');
+        if(productsTableBody) productsTableBody.addEventListener('click', (e) => this.handleTableActions(e, 'product'));
+        
+        const usersTableBody = document.getElementById('users-table-body');
+        if(usersTableBody) usersTableBody.addEventListener('click', (e) => this.handleTableActions(e, 'user'));
 
         // Logout
-        document.getElementById('adminLogout').addEventListener('click', (e) => {
+        const adminLogout = document.getElementById('adminLogout');
+        if(adminLogout) adminLogout.addEventListener('click', (e) => {
             e.preventDefault();
-            // Sử dụng AuthManager đã được export từ main.js
             if (window.AuthManager) {
                 window.AuthManager.logout();
             }
         });
     },
 
+    /**
+     * Handles the login attempt from the admin login form.
+     */
     async handleAdminLogin(e) {
         e.preventDefault();
         const email = document.getElementById('admin-email').value;
@@ -138,12 +179,10 @@ const AdminPanel = {
         submitBtn.textContent = 'Đang đăng nhập...';
 
         try {
-            // Sử dụng AuthManager từ main.js, nó sẽ tự động cập nhật window.currentUser
-            // và phát sự kiện 'authChange' mà chúng ta đã lắng nghe ở trên.
+            // Use AuthManager from main.js. It will update window.currentUser and
+            // dispatch the 'authChange' event, which our listener will catch.
             await window.AuthManager.login(email, password);
-            // Sau khi đăng nhập thành công, sự kiện 'authChange' sẽ được kích hoạt
-            // và hàm checkAuthAndToggleView sẽ tự động xử lý việc hiển thị panel.
-
+            // The checkAuthAndToggleView function will be called automatically by the event listener.
         } catch (error) {
             errorMessage.textContent = error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
         } finally {
@@ -151,25 +190,25 @@ const AdminPanel = {
             submitBtn.textContent = 'Đăng nhập';
         }
     },
-    
+
     // --- DATA FETCHING & RENDERING ---
     async fetchInitialData() {
         this.setLoadingState('products-table-body', 6);
         this.setLoadingState('users-table-body', 5);
-        
+
         try {
             const [productsData, usersData] = await Promise.all([
-                ApiManager.call('/products?limit=1000&sort=-createdAt', 'GET', null, false), // Lấy sản phẩm mới nhất trước
-                ApiManager.call('/users', 'GET', null, true) // Yêu cầu quyền admin
+                ApiManager.call('/products?limit=1000&sort=-createdAt', 'GET', null, false),
+                ApiManager.call('/users', 'GET', null, true)
             ]);
 
-            this.products = productsData.data.products;
-            this.users = usersData.data.users;
-            
+            this.products = productsData.data.products || [];
+            this.users = usersData.data.users || [];
+
             this.generateActivityFeed();
             this.renderAll();
         } catch (error) {
-            Utils.showToast('Không thể tải dữ liệu. ' + error.message, 'error');
+            Utils.showToast('Không thể tải dữ liệu quản trị. ' + error.message, 'error');
             this.setErrorState('products-table-body', 6, 'Lỗi tải sản phẩm');
             this.setErrorState('users-table-body', 5, 'Lỗi tải người dùng');
         }
@@ -198,7 +237,7 @@ const AdminPanel = {
         const totalRevenue = this.products.reduce((sum, p) => sum + (p.sales || 0) * p.price, 0);
         document.getElementById('total-revenue').textContent = Utils.formatPrice(totalRevenue);
 
-        const topSeller = [...this.products].sort((a,b) => (b.sales || 0) - (a.sales || 0))[0];
+        const topSeller = [...this.products].sort((a, b) => (b.sales || 0) - (a.sales || 0))[0];
         if (topSeller) {
             document.getElementById('top-seller').textContent = topSeller.title;
             document.getElementById('top-seller-sales').textContent = `${topSeller.sales || 0} lượt mua`;
@@ -207,10 +246,12 @@ const AdminPanel = {
     },
 
     generateActivityFeed() {
-        const productActivity = this.products.slice(0, 5).map(p => ({ type: 'product', text: `Sản phẩm mới: <strong>${p.title}</strong>`, time: p.createdAt }));
-        const userActivity = this.users.slice(0, 5).map(u => ({ type: 'user', text: `Người dùng mới: <strong>${u.name}</strong>`, time: u.createdAt }));
-            
-        this.activity = [...productActivity, ...userActivity].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
+        const productActivity = this.products.slice(0, 5).map(p => ({ type: 'product', text: `Sản phẩm mới: <strong>${Utils.sanitizeInput(p.title)}</strong>`, time: p.createdAt }));
+        const userActivity = this.users.slice(0, 5).map(u => ({ type: 'user', text: `Người dùng mới: <strong>${Utils.sanitizeInput(u.name)}</strong>`, time: u.createdAt }));
+
+        this.activity = [...productActivity, ...userActivity]
+            .sort((a, b) => new Date(b.time) - new Date(a.time))
+            .slice(0, 10);
     },
 
     renderActivityFeed() {
@@ -226,11 +267,11 @@ const AdminPanel = {
                     <i class="fas ${item.type === 'user' ? 'fa-user-plus' : 'fa-plus-circle'}"></i>
                 </div>
                 <div class="activity-text">${item.text}</div>
-                <div class="activity-time">${this.moment(item.time).fromNow()}</div>
+                <div class="activity-time">${this.moment(item.time)}</div>
             </div>
         `).join('');
     },
-    
+
     // --- TABLE MANAGEMENT (Products & Users) ---
     filterAndRenderProducts(searchTerm = '') {
         const lowerCaseSearchTerm = searchTerm.toLowerCase();
@@ -250,35 +291,39 @@ const AdminPanel = {
 
     renderPaginatedTable(type, data) {
         const sortState = this[`${type}Sort`];
-        const currentPage = this[`${type}CurrentPage`];
         
-        // Sort data
+        // Use the current page from state, or reset if it's invalid for the new data
+        let currentPage = this[`${type}CurrentPage`];
+        const totalPages = Math.ceil(data.length / this.itemsPerPage) || 1;
+        if (currentPage > totalPages) {
+            currentPage = 1;
+            this[`${type}CurrentPage`] = 1;
+        }
+
         const sortedData = [...data].sort((a, b) => {
-            let valA = a[sortState.column] || (sortState.column === 'createdAt' ? 0 : '');
-            let valB = b[sortState.column] || (sortState.column === 'createdAt' ? 0 : '');
+            let valA = a[sortState.column];
+            let valB = b[sortState.column];
             
             if (sortState.column === 'createdAt') {
-                valA = new Date(valA).getTime();
-                valB = new Date(valB).getTime();
+                return sortState.order === 'asc' 
+                    ? new Date(valA) - new Date(valB) 
+                    : new Date(valB) - new Date(valA);
             }
-
             if (typeof valA === 'string') {
                  return sortState.order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
             }
-            return sortState.order === 'asc' ? valA - valB : valB - valA;
+            return sortState.order === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
         });
 
-        // Paginate data
         const totalItems = sortedData.length;
-        const totalPages = Math.ceil(totalItems / this.itemsPerPage);
         const startIndex = (currentPage - 1) * this.itemsPerPage;
         const endIndex = startIndex + this.itemsPerPage;
         const paginatedData = sortedData.slice(startIndex, endIndex);
 
-        // Render table body
         const tableBodyId = `${type}s-table-body`;
         const renderFunction = type === 'product' ? this.renderProductRow : this.renderUserRow;
         const tableBody = document.getElementById(tableBodyId);
+        
         if (paginatedData.length === 0) {
             const colspan = type === 'product' ? 6 : 5;
             this.setErrorState(tableBodyId, colspan, 'Không tìm thấy kết quả.');
@@ -286,15 +331,14 @@ const AdminPanel = {
             tableBody.innerHTML = paginatedData.map(renderFunction).join('');
         }
 
-        // Render pagination controls
         this.renderPagination(type, currentPage, totalPages, totalItems);
     },
     
     renderProductRow(p) {
         return `
             <tr>
-                <td><img src="${p.images?.[0] || 'https://via.placeholder.com/50x50?text=No+Img'}" alt="${p.title}" class="product-image-thumb"></td>
-                <td>${p.title}</td>
+                <td><img src="${Utils.sanitizeInput(p.images?.[0] || 'https://via.placeholder.com/50x50?text=No+Img')}" alt="${Utils.sanitizeInput(p.title)}" class="product-image-thumb"></td>
+                <td>${Utils.sanitizeInput(p.title)}</td>
                 <td>${Utils.formatPrice(p.price)}</td>
                 <td>${p.stock}</td>
                 <td>${p.sales || 0}</td>
@@ -309,8 +353,8 @@ const AdminPanel = {
     renderUserRow(u) {
         return `
             <tr>
-                <td>${u.name}</td>
-                <td>${u.email}</td>
+                <td>${Utils.sanitizeInput(u.name)}</td>
+                <td>${Utils.sanitizeInput(u.email)}</td>
                 <td><span class="role-badge ${u.role}">${u.role}</span></td>
                 <td>${Utils.formatDate(u.createdAt)}</td>
                 <td class="actions">
@@ -320,11 +364,12 @@ const AdminPanel = {
             </tr>
         `;
     },
-
+    
     renderPagination(type, currentPage, totalPages, totalItems) {
         const container = document.getElementById(`${type}-pagination`);
         const pageInfo = document.getElementById(`${type}-page-info`);
-        
+        if(!container || !pageInfo) return;
+
         if (totalPages <= 1) {
             container.innerHTML = '';
             pageInfo.textContent = `Tổng: ${totalItems} mục`;
@@ -336,29 +381,19 @@ const AdminPanel = {
             <span>Trang ${currentPage} / ${totalPages}</span>
             <button id="${type}-next-btn" ${currentPage === totalPages ? 'disabled' : ''}><i class="fas fa-chevron-right"></i></button>
         `;
-        pageInfo.textContent = `Hiển thị ${this.itemsPerPage * (currentPage - 1) + 1} - ${Math.min(this.itemsPerPage * currentPage, totalItems)} của ${totalItems} mục`;
+        pageInfo.textContent = `Hiển thị ${startIndex + 1} - ${Math.min(endIndex, totalItems)} của ${totalItems} mục`;
+        const startIndex = this.itemsPerPage * (currentPage - 1);
+        const endIndex = this.itemsPerPage * currentPage;
+        pageInfo.textContent = `Hiển thị ${startIndex + 1} - ${Math.min(endIndex, totalItems)} của ${totalItems} mục`;
+
 
         document.getElementById(`${type}-prev-btn`).addEventListener('click', () => this.changePage(type, -1));
         document.getElementById(`${type}-next-btn`).addEventListener('click', () => this.changePage(type, 1));
     },
-    
+
     changePage(type, direction) {
-        const totalItems = this[`${type}s`].filter(item => {
-            const searchInput = document.getElementById(`${type}SearchInput`);
-            if (!searchInput || !searchInput.value) return true;
-            const searchTerm = searchInput.value.toLowerCase();
-            if (type === 'product') return item.title.toLowerCase().includes(searchTerm);
-            if (type === 'user') return item.name.toLowerCase().includes(searchTerm) || item.email.toLowerCase().includes(searchTerm);
-            return true;
-        }).length;
-
-        const totalPages = Math.ceil(totalItems / this.itemsPerPage);
         this[`${type}CurrentPage`] += direction;
-        
-        if (this[`${type}CurrentPage`] < 1) this[`${type}CurrentPage`] = 1;
-        if (this[`${type}CurrentPage`] > totalPages) this[`${type}CurrentPage`] = totalPages;
-
-        this[`filterAndRender${type.charAt(0).toUpperCase() + type.slice(1)}s`]();
+        this[`filterAndRender${type.charAt(0).toUpperCase() + type.slice(1)}s`](document.getElementById(`${type}SearchInput`).value);
     },
 
     handleSort(type, column) {
@@ -369,26 +404,21 @@ const AdminPanel = {
             sortState.column = column;
             sortState.order = 'asc';
         }
-        
-        this[`${type}CurrentPage`] = 1;
 
+        this[`${type}CurrentPage`] = 1;
         const tableId = `${type}s-table`;
-        document.querySelectorAll(`#${tableId} th[data-sort] .sort-icon`).forEach(icon => {
-            icon.className = 'fas fa-sort sort-icon';
-        });
-        const activeTh = document.querySelector(`#${tableId} th[data-sort="${column}"] .sort-icon`);
-        if (activeTh) activeTh.className = `fas fa-sort-${sortState.order === 'asc' ? 'up' : 'down'} sort-icon`;
-        
-        this[`filterAndRender${type.charAt(0).toUpperCase() + type.slice(1)}s`]();
+        document.querySelectorAll(`#${tableId} th[data-sort] .sort-icon`).forEach(icon => icon.className = 'fas fa-sort sort-icon');
+        const activeThIcon = document.querySelector(`#${tableId} th[data-sort="${column}"] .sort-icon`);
+        if (activeThIcon) activeThIcon.className = `fas fa-sort-${sortState.order === 'asc' ? 'up' : 'down'} sort-icon`;
+
+        this[`filterAndRender${type.charAt(0).toUpperCase() + type.slice(1)}s`](document.getElementById(`${type}SearchInput`).value);
     },
 
     handleTableActions(e, type) {
         const button = e.target.closest('button');
         if (!button) return;
-        
         const id = button.dataset.id;
         if (!id) return;
-
         if (button.classList.contains('btn-edit')) this.handleEditProduct(id);
         if (button.classList.contains('btn-delete')) this.handleDeleteProduct(id);
         if (button.classList.contains('btn-promote')) this.handlePromoteUser(id);
@@ -412,8 +442,8 @@ const AdminPanel = {
             images: document.getElementById('images').value.split(/[, \n]+/).map(url => url.trim()).filter(url => url && Utils.validateURL(url)),
             badge: document.getElementById('badge').value.trim() || undefined,
         };
-        
-        if (!productData.title || !productData.price || productData.stock === undefined) {
+
+        if (!productData.title || isNaN(productData.price) || isNaN(productData.stock)) {
             Utils.showToast('Vui lòng điền các trường bắt buộc (*).', 'error');
             return;
         }
@@ -421,9 +451,7 @@ const AdminPanel = {
         try {
             const endpoint = isEditing ? `/products/${productId}` : '/products';
             const method = isEditing ? 'PATCH' : 'POST';
-            
             await ApiManager.call(endpoint, method, productData, true);
-            
             Utils.showToast(`Sản phẩm đã được ${isEditing ? 'cập nhật' : 'thêm'} thành công!`, 'success');
             this.closeProductModal();
             await this.fetchInitialData();
@@ -451,7 +479,6 @@ const AdminPanel = {
     async handlePromoteUser(id) {
         if (!confirm('Bạn có chắc chắn muốn thăng cấp người dùng này thành Admin?')) return;
         try {
-            // API endpoint này cần được tạo ở backend
             await ApiManager.call(`/users/${id}`, 'PATCH', { role: 'admin' }, true);
             Utils.showToast('Đã thăng cấp người dùng.', 'success');
             await this.fetchInitialData();
@@ -463,7 +490,6 @@ const AdminPanel = {
     async handleBanUser(id) {
         if (!confirm('Bạn có chắc chắn muốn cấm người dùng này?')) return;
         try {
-            // API endpoint này cần được tạo ở backend
             await ApiManager.call(`/users/${id}`, 'PATCH', { active: false }, true);
             Utils.showToast('Đã cấm người dùng.', 'success');
             await this.fetchInitialData();
@@ -476,10 +502,8 @@ const AdminPanel = {
     navigateToTab(tabId) {
         document.querySelectorAll('.admin-nav .nav-item').forEach(item => item.classList.remove('active'));
         document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
-        
         document.querySelector(`.nav-item[data-tab="${tabId}"]`).classList.add('active');
         document.getElementById(tabId).classList.add('active');
-        
         document.getElementById('pageTitle').textContent = document.querySelector(`.nav-item[data-tab="${tabId}"] span`).textContent;
         if (window.innerWidth <= 992) this.closeSidebar();
     },
@@ -513,7 +537,6 @@ const AdminPanel = {
                     }
                 }
             });
-            // Handle potentially missing fields in the form
             document.getElementById('detailedDescription').value = product.detailedDescription || '';
             document.getElementById('oldPrice').value = product.oldPrice || '';
         } else {
@@ -524,13 +547,14 @@ const AdminPanel = {
 
     closeProductModal() {
         document.getElementById('product-modal').style.display = 'none';
+        document.getElementById('product-form').reset();
     },
-    
+
     updateImagePreview(urls) {
         const previewContainer = document.getElementById('image-preview');
         previewContainer.innerHTML = '';
         if (!urls) return;
-        const urlArray = urls.split(/[, \n]+/).map(url => url.trim()).filter(url => url);
+        const urlArray = urls.split(/[, \n]+/).map(url => url.trim()).filter(Boolean);
         urlArray.forEach(url => {
             if (Utils.validateURL(url)) {
                 const img = document.createElement('img');
@@ -548,8 +572,7 @@ const AdminPanel = {
                 console.warn("Thư viện Socket.IO không tìm thấy. Tính năng thông báo bị vô hiệu hóa.");
                 return;
             }
-            // Kết nối đến server gốc, không có /api/v1
-            this.socket = io(CONFIG.API_BASE_URL.replace('/api/v1',''), { transports: ['websocket'] }); 
+            this.socket = io(CONFIG.API_BASE_URL.replace('/api/v1', ''), { transports: ['websocket'] });
             this.socket.on('connect', () => {
                 Utils.showToast('Hệ thống thông báo sẵn sàng!', 'info');
                 document.querySelector('#broadcastForm button').disabled = false;
@@ -576,10 +599,9 @@ const AdminPanel = {
             Utils.showToast('Chưa kết nối đến server thông báo.', 'error');
         }
     },
-    
+
     // --- UTILITIES ---
     moment(dateString) {
-        // Simple moment.js 'fromNow' alternative
         if (!dateString) return 'không xác định';
         const diff = new Date() - new Date(dateString);
         const seconds = Math.floor(diff / 1000);
