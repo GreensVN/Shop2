@@ -209,7 +209,7 @@
         .content-section { display: none; }
         .content-section.active { display: block; animation: fadeIn 0.5s; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes zoomIn { to { opacity: 1; transform: scale(1); } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 
         /* --- Dashboard Specifics --- */
         .dashboard-grid {
@@ -519,7 +519,7 @@
         </div>
     </div>
 
-    <!-- Toast Container - Sử dụng từ main.js -->
+    <!-- Toast Container - Utilized from main.js -->
     <div id="toastContainer"></div>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
