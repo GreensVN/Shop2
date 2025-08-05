@@ -1,529 +1,386 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - Shop Grow A Garden</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        :root {
-            --primary-color: #4f46e5;
-            --secondary-color: #1f2937;
-            --light-color: #f9fafb;
-            --gray-color: #6b7280;
-            --border-color: #e5e7eb;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
-            --font-main: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-            --border-radius: 12px;
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html { scroll-behavior: smooth; }
-        body {
-            font-family: var(--font-main);
-            background-color: var(--light-color);
-            color: var(--secondary-color);
-            display: flex;
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
+// main.js - Final Production Version (Combined & Refined)
+"use strict";
 
-        /* --- Admin Login Screen --- */
-        #admin-login-container {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: var(--light-color);
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 200;
-        }
-        .login-box {
-            background: white;
-            padding: 3rem;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-lg);
-            text-align: center;
-            width: 100%;
-            max-width: 400px;
-            animation: zoomIn 0.5s ease-out;
-        }
-        .login-logo {
-            height: 60px;
-            margin-bottom: 1rem;
-        }
-        .login-box h2 {
-            margin-bottom: 0.5rem;
-            font-size: 1.5rem;
-            color: var(--secondary-color);
-        }
-        .login-box p {
-            margin-bottom: 2rem;
-            color: var(--gray-color);
-        }
-        #admin-login-form .input-group {
-            position: relative;
-            margin-bottom: 1.5rem;
-        }
-        #admin-login-form .input-group i {
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--gray-color);
-        }
-        #admin-login-form input {
-            width: 100%;
-            padding: 1rem 1rem 1rem 2.5rem;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: var(--transition);
-        }
-        #admin-login-form input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
-        }
-        .btn-login {
-            width: 100%;
-            padding: 1rem;
-            border: none;
-            border-radius: 8px;
-            background: var(--primary-color);
-            color: white;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        .btn-login:hover {
-            background-color: #4338ca;
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-        .btn-login:disabled {
-            background-color: var(--gray-color);
-            cursor: not-allowed;
-        }
-        .error-message {
-            color: var(--danger-color);
-            margin-top: 1rem;
-            font-size: 0.9rem;
-            height: 1.2rem; /* Reserve space to prevent layout shift */
-        }
-        .back-to-shop {
-            display: inline-block;
-            margin-top: 1.5rem;
-            color: var(--gray-color);
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-        .back-to-shop:hover {
-            color: var(--primary-color);
-            text-decoration: underline;
-        }
+// =================================================================
+// CONFIGURATION & GLOBAL VARIABLES
+// =================================================================
 
-        /* --- Sidebar --- */
-        .admin-sidebar {
-            width: 260px;
-            background: var(--secondary-color);
-            color: #e5e7eb;
-            height: 100vh;
-            position: fixed;
-            top: 0;
-            left: 0;
-            display: flex;
-            flex-direction: column;
-            padding: 1.5rem;
-            transition: transform var(--transition);
-            z-index: 100;
+const CONFIG = {
+    API_BASE_URL: 'https://shop-4mlk.onrender.com/api/v1',
+    AUTHORIZED_EMAILS: [
+        'chinhan20917976549a@gmail.com',
+        'ryantran149@gmail.com',
+        'seller@shopgrowgarden.com',
+        'greensvn@gmail.com'
+    ],
+    STORAGE_KEYS: {
+        TOKEN: 'token',
+        USER: 'currentUser',
+        PRODUCTS: 'localProducts'
+    },
+    TOAST_DURATION: 3000,
+    ANIMATION_DELAY: 0.08
+};
+
+let currentUser = null;
+let allProducts = [];
+
+// =================================================================
+// UTILITY CLASS
+// =================================================================
+
+class Utils {
+    static formatPrice(price) {
+        const num = typeof price === 'string' ? parseInt(price, 10) : price;
+        if (isNaN(num)) return '0đ';
+        return new Intl.NumberFormat('vi-VN').format(num) + 'đ';
+    }
+
+    static formatDate(date) {
+        try {
+            return new Date(date).toLocaleDateString('vi-VN');
+        } catch {
+            return 'N/A';
         }
-        .sidebar-header {
-            text-align: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1.5rem;
-            border-bottom: 1px solid #374151;
+    }
+
+    static generateId() {
+        return 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    static showToast(message, type = 'success', duration = CONFIG.TOAST_DURATION) {
+        const container = this.getToastContainer();
+        const toast = this.createToastElement(message, type);
+
+        container.appendChild(toast);
+        this.animateToast(toast, duration);
+    }
+
+    static getToastContainer() {
+        let container = document.getElementById('toastContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toastContainer';
+            Object.assign(container.style, {
+                position: 'fixed', top: '20px', right: '20px', zIndex: '10003'
+            });
+            document.body.appendChild(container);
         }
-        .sidebar-header .logo { height: 50px; margin-bottom: 10px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
-        .sidebar-header h3 { color: white; font-weight: 600; }
+        return container;
+    }
 
-        .admin-nav .nav-item {
-            display: flex;
-            align-items: center;
-            padding: 0.875rem 1rem;
-            margin-bottom: 0.5rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.2s, color 0.2s, transform 0.2s;
-            font-weight: 500;
+    static createToastElement(message, type) {
+        const toast = document.createElement('div');
+        const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle', warning: 'fa-exclamation-triangle' };
+        const colors = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' };
+        toast.innerHTML = `<div style="display: flex; align-items: center;"><i class="fas ${icons[type] || icons.info}" style="margin-right: 8px;"></i><span>${message}</span></div><button class="toast-close" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer; margin-left: 10px;">×</button>`;
+        Object.assign(toast.style, { background: colors[type] || colors.info, color: 'white', padding: '12px 20px', borderRadius: '8px', marginBottom: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', transform: 'translateX(100%)', opacity: '0', transition: 'all 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'space-between', minWidth: '300px', zIndex: '9999' });
+        return toast;
+    }
+
+    static animateToast(toast, duration) {
+        requestAnimationFrame(() => { toast.style.transform = 'translateX(0)'; toast.style.opacity = '1'; });
+        const closeToast = () => { toast.style.transform = 'translateX(100%)'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); };
+        const timer = setTimeout(closeToast, duration);
+        toast.querySelector('.toast-close').addEventListener('click', () => { clearTimeout(timer); closeToast(); });
+    }
+
+    static showLoading(element, message = 'Đang tải...') {
+        if (element) element.innerHTML = `<div class="loading-placeholder" style="text-align: center; padding: 50px; color: #888; grid-column: 1 / -1;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top: 10px;">${message}</p></div>`;
+    }
+
+    static showError(element, message = 'Có lỗi xảy ra.') {
+        if (element) element.innerHTML = `<div class="error-state" style="text-align: center; padding: 50px; color: #ef4444; grid-column: 1 / -1;"><i class="fas fa-exclamation-triangle fa-2x"></i><p style="margin-top: 10px;">${message}</p></div>`;
+    }
+
+    static sanitizeInput(input) { return input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').replace(/javascript:/gi, '').replace(/on\w+\s*=/gi, ''); }
+    static validateURL(url) { try { new URL(url); return true; } catch { return false; } }
+}
+
+// =================================================================
+// STORAGE MANAGER
+// =================================================================
+
+class StorageManager {
+    static saveProducts(products) { try { localStorage.setItem(CONFIG.STORAGE_KEYS.PRODUCTS, JSON.stringify(products)); return true; } catch (error) { return false; } }
+    static loadProducts() { try { const stored = localStorage.getItem(CONFIG.STORAGE_KEYS.PRODUCTS); return stored ? JSON.parse(stored) : []; } catch { return []; } }
+    static addProduct(product) { const products = this.loadProducts(); products.unshift(product); return this.saveProducts(products); }
+    static deleteProduct(productId) { const products = this.loadProducts(); const filtered = products.filter(p => p._id !== productId); return this.saveProducts(filtered); }
+    static updateProduct(productId, updates) {
+        const products = this.loadProducts(); const index = products.findIndex(p => p._id === productId);
+        if (index !== -1) { products[index] = { ...products[index], ...updates }; return this.saveProducts(products); }
+        return false;
+    }
+}
+
+// =================================================================
+// PERMISSION MANAGER
+// =================================================================
+
+class PermissionManager {
+    static checkPostPermission() { if (!currentUser?.email) return false; const userEmail = currentUser.email.toLowerCase().trim(); return CONFIG.AUTHORIZED_EMAILS.map(email => email.toLowerCase()).includes(userEmail) || currentUser.role === 'admin'; }
+    static checkDeletePermission(product) { if (!currentUser) return false; if (this.checkPostPermission() || currentUser.role === 'admin') return true; return product.createdBy === currentUser._id; }
+}
+
+// =================================================================
+// API MANAGER
+// =================================================================
+
+class ApiManager {
+    static async call(endpoint, method = 'GET', body = null, requireAuth = true) {
+        const headers = { 'Content-Type': 'application/json' }; const token = localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN);
+        if (token && requireAuth) { headers['Authorization'] = `Bearer ${token}`; }
+        try {
+            const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`, { method, headers, body: body ? JSON.stringify(body) : null });
+            if (response.status === 204) return { success: true };
+            const data = await response.json();
+            if (response.status === 401 && !requireAuth) return { data: { products: [], favorites: [], cart: [] } };
+            if (!response.ok) throw new Error(data.message || 'Server error occurred');
+            return data;
+        } catch (error) { throw error; }
+    }
+    static async createProduct(productData) { return await this.call('/products', 'POST', productData); }
+    static async updateProduct(productId, productData) { return await this.call(`/products/${productId}`, 'PATCH', productData); }
+    static async deleteProduct(productId) { return await this.call(`/products/${productId}`, 'DELETE'); }
+    static async getProducts() { const hasToken = !!localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN); return await this.call('/products', 'GET', null, hasToken); }
+}
+
+// =================================================================
+// FLOATING BUTTONS MANAGER
+// =================================================================
+
+class FloatingButtonsManager {
+    static init() { this.addStyles(); this.create(); }
+    static addStyles() {
+        if (document.getElementById('floatingButtonStyles')) return;
+        const styles = document.createElement('style'); styles.id = 'floatingButtonStyles';
+        styles.textContent = `.floating-btn{display:flex!important;align-items:center;gap:.5rem;padding:1rem 1.5rem;border-radius:50px;font-weight:600;text-decoration:none;border:none;cursor:pointer;transition:all .3s cubic-bezier(.4,0,.2,1);box-shadow:0 8px 25px rgba(0,0,0,.15);font-family:inherit;font-size:14px;backdrop-filter:blur(10px);position:relative;overflow:hidden;white-space:nowrap}.floating-btn:hover{transform:translateY(-3px) scale(1.05)}.messenger-btn{background:linear-gradient(135deg,#0084ff 0%,#0066cc 100%)!important;color:#fff!important}.post-btn{background:linear-gradient(135deg,#10b981 0%,#059669 100%)!important;color:#fff!important}#floatingButtonsContainer{position:fixed!important;bottom:2rem!important;right:2rem!important;z-index:1000!important;display:flex!important;flex-direction:column!important;gap:1rem!important}@media (max-width:768px){#floatingButtonsContainer{bottom:1rem!important;right:1rem!important}}`;
+        document.head.appendChild(styles);
+    }
+    static create() {
+        const existingContainer = document.getElementById('floatingButtonsContainer'); if (existingContainer) existingContainer.remove();
+        const container = document.createElement('div'); container.id = 'floatingButtonsContainer';
+        container.appendChild(this.createMessengerButton());
+        if (PermissionManager.checkPostPermission()) { container.appendChild(this.createPostButton()); }
+        document.body.appendChild(container);
+    }
+    static createMessengerButton() { const btn = document.createElement('a'); btn.href = 'https://m.me/100063758577070'; btn.target = '_blank'; btn.rel = 'noopener noreferrer'; btn.className = 'floating-btn messenger-btn'; btn.innerHTML = `<i class="fab fa-facebook-messenger"></i><span>Liên hệ</span>`; btn.title = 'Liên hệ qua Facebook Messenger'; return btn; }
+    static createPostButton() {
+        const btn = document.createElement('button'); btn.className = 'floating-btn post-btn'; btn.innerHTML = `<i class="fas fa-plus"></i><span>Đăng tin</span>`; btn.title = 'Đăng sản phẩm mới';
+        btn.addEventListener('click', () => { if (window.ProductModal?.show) { window.ProductModal.show(); } else { Utils.showToast('Chức năng chưa sẵn sàng!', 'error'); } });
+        return btn;
+    }
+    static update() { setTimeout(() => this.create(), 100); }
+}
+
+// =================================================================
+// CART & FAVORITES MANAGERS
+// =================================================================
+
+const CartManager = {
+    async get() { if (!currentUser) return []; try { const result = await ApiManager.call('/cart'); return result.data.cart || []; } catch { return []; } },
+    async add(productId, quantity = 1) { if (!currentUser) throw new Error('Vui lòng đăng nhập!'); await ApiManager.call('/cart', 'POST', { productId, quantity }); await this.updateCount(); },
+    async updateCount() { if (!currentUser) return; try { const cart = await this.get(); const count = cart.reduce((sum, item) => sum + (item.quantity || 0), 0); document.querySelectorAll('.cart-count, #cartCount').forEach(el => { el.textContent = count; el.style.display = count > 0 ? 'inline-flex' : 'none'; }); } catch { /* fail silently */ } }
+};
+const FavoriteManager = {
+    async get() { if (!currentUser) return []; try { const result = await ApiManager.call('/favorites'); return result.data.favorites || []; } catch { return []; } },
+    async add(productId) { if (!currentUser) throw new Error('Vui lòng đăng nhập!'); await ApiManager.call('/favorites', 'POST', { productId }); await this.updateStatus(productId, true); },
+    async remove(productId) { if (!currentUser) return; await ApiManager.call(`/favorites/${productId}`, 'DELETE'); await this.updateStatus(productId, false); },
+    async updateStatus(productId, isFavorite) { document.querySelectorAll(`.btn-favorite[data-id="${productId}"], .favorite-btn[data-id="${productId}"]`).forEach(btn => { btn.classList.toggle('active', isFavorite); const icon = btn.querySelector('i'); if (icon) icon.className = isFavorite ? 'fas fa-heart' : 'far fa-heart'; }); }
+};
+
+// =================================================================
+// AUTHENTICATION MANAGER
+// =================================================================
+
+class AuthManager {
+    static async login(email, password) { const data = await ApiManager.call('/users/login', 'POST', { email, password }); localStorage.setItem(CONFIG.STORAGE_KEYS.TOKEN, data.token); currentUser = { ...data.data.user, email: data.data.user.email || email }; localStorage.setItem(CONFIG.STORAGE_KEYS.USER, JSON.stringify(currentUser)); await AuthManager.updateUIAfterLogin(); return currentUser; }
+    static async register(name, email, password, passwordConfirm) { const data = await ApiManager.call('/users/signup', 'POST', { name, email, password, passwordConfirm }); localStorage.setItem(CONFIG.STORAGE_KEYS.TOKEN, data.token); currentUser = { ...data.data.user, name: data.data.user.name || name, email: data.data.user.email || email }; localStorage.setItem(CONFIG.STORAGE_KEYS.USER, JSON.stringify(currentUser)); await AuthManager.updateUIAfterLogin(); return currentUser; }
+    static logout() {
+        if (!confirm('Bạn có chắc chắn muốn đăng xuất?')) return;
+        localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN); localStorage.removeItem(CONFIG.STORAGE_KEYS.USER); currentUser = null;
+        AuthManager.updateUIAfterLogout(); Utils.showToast('Đăng xuất thành công!', 'success');
+        const protectedPages = ['account.html', 'cart.html', 'favorite.html', 'admin.html']; if (protectedPages.some(page => window.location.pathname.includes(page))) { setTimeout(() => window.location.href = 'index.html', 1000); }
+    }
+    static async checkAutoLogin() {
+        const token = localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN);
+        if (token) {
+            try {
+                const data = await ApiManager.call('/users/me'); currentUser = data.data.user;
+                if (!currentUser.email) throw new Error('Invalid user data');
+                localStorage.setItem(CONFIG.STORAGE_KEYS.USER, JSON.stringify(currentUser));
+                await AuthManager.updateUIAfterLogin();
+            } catch (error) {
+                localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN); localStorage.removeItem(CONFIG.STORAGE_KEYS.USER); currentUser = null;
+                AuthManager.updateUIAfterLogout();
+            }
+        } else { AuthManager.updateUIAfterLogout(); }
+    }
+    static getDisplayName(user) { if (!user) return 'User'; if (user.name?.trim()) return user.name.trim(); if (user.email?.includes('@')) return user.email.split('@')[0]; return 'User'; }
+    static async updateUIAfterLogin() {
+        if (!currentUser) return;
+        const loginButton = document.getElementById('loginButton'); const userDropdown = document.getElementById('userDropdown');
+        if (loginButton) loginButton.style.display = 'none'; if (userDropdown) userDropdown.style.display = 'flex';
+        const displayName = AuthManager.getDisplayName(currentUser); const firstLetter = displayName.charAt(0).toUpperCase();
+        document.querySelectorAll('.user-name, #userName').forEach(el => { if (el) el.textContent = displayName; });
+        document.querySelectorAll('.user-avatar, #userAvatar').forEach(el => { if (el) el.textContent = firstLetter; });
+        await CartManager.updateCount(); FloatingButtonsManager.update();
+        // <<< FIX START >>>
+        // Thông báo cho toàn bộ ứng dụng rằng trạng thái đăng nhập đã thay đổi
+        document.dispatchEvent(new CustomEvent('authChange', { detail: { user: currentUser } }));
+        // <<< FIX END >>>
+    }
+    static updateUIAfterLogout() {
+        const loginButton = document.getElementById('loginButton'); const userDropdown = document.getElementById('userDropdown');
+        if (loginButton) loginButton.style.display = 'flex'; if (userDropdown) userDropdown.style.display = 'none';
+        document.querySelectorAll('.cart-count, #cartCount').forEach(el => { el.textContent = '0'; el.style.display = 'none'; });
+        FloatingButtonsManager.update();
+        // <<< FIX START >>>
+        // Thông báo cho toàn bộ ứng dụng rằng trạng thái đăng nhập đã thay đổi
+        document.dispatchEvent(new CustomEvent('authChange', { detail: { user: null } }));
+        // <<< FIX END >>>
+    }
+}
+
+// =================================================================
+// PRODUCT MANAGER
+// =================================================================
+
+class ProductManager {
+    static async loadProducts() {
+        const productsGrid = document.getElementById('productsGrid'); if (!productsGrid) return; Utils.showLoading(productsGrid, 'Đang tải sản phẩm...');
+        try {
+            const data = await ApiManager.getProducts(); let products = data.data?.products || [];
+            const localProducts = StorageManager.loadProducts();
+            const combinedProducts = [...localProducts, ...products];
+            allProducts = Array.from(new Map(combinedProducts.map(p => [p._id, p])).values());
+            if (window.renderApiProducts) { window.renderApiProducts(allProducts); }
+            if (currentUser && window.updateAllFavoriteButtons) { await window.updateAllFavoriteButtons(); }
+        } catch (error) {
+            const localProducts = StorageManager.loadProducts();
+            if (localProducts.length > 0) { allProducts = localProducts; if (window.renderApiProducts) { window.renderApiProducts(localProducts); } Utils.showToast('Hiển thị sản phẩm offline.', 'warning'); }
+            else { Utils.showError(productsGrid, 'Không thể tải sản phẩm. Vui lòng thử lại.'); }
         }
-        .admin-nav .nav-item:hover { background: #374151; color: white; transform: translateX(5px); }
-        .admin-nav .nav-item.active { background: var(--primary-color); color: white; font-weight: 600; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.4); }
-        .admin-nav .nav-item i { margin-right: 1rem; width: 20px; text-align: center; font-size: 1.1rem; }
-
-        .sidebar-footer {
-            margin-top: auto;
-            text-align: center;
-            padding-top: 1.5rem;
-            border-top: 1px solid #374151;
+    }
+    static async createProduct(productData) {
+        const product = { _id: Utils.generateId(), createdBy: currentUser?._id, ...productData };
+        try { 
+            await ApiManager.createProduct(product); 
+            Utils.showToast('Đăng sản phẩm thành công!', 'success'); 
+            await this.loadProducts(); 
+            return true; 
+        } catch (error) { 
+            if (StorageManager.addProduct(product)) { 
+                allProducts.unshift(product); 
+                if (window.renderApiProducts) window.renderApiProducts(allProducts); 
+                Utils.showToast('Đăng sản phẩm thành công! (Lưu cục bộ)', 'info'); 
+                return true; 
+            }
         }
-        .sidebar-footer p { font-size: 0.9rem; margin-bottom: 0.5rem; }
-        .sidebar-footer a { color: var(--gray-color); text-decoration: none; transition: color 0.2s; }
-        .sidebar-footer a:hover { color: white; text-decoration: underline; }
-
-        /* --- Main Content --- */
-        .admin-main {
-            margin-left: 260px;
-            width: calc(100% - 260px);
-            padding: 2rem;
-            transition: margin-left var(--transition), width var(--transition);
+        throw new Error('Không thể lưu sản phẩm');
+    }
+    static async deleteProduct(productId) {
+        if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return;
+        try { 
+            if (productId.startsWith('local_')) { 
+                StorageManager.deleteProduct(productId); 
+            } else { 
+                await ApiManager.deleteProduct(productId); 
+            } 
+            allProducts = allProducts.filter(p => p._id !== productId); 
+            if (window.renderApiProducts) window.renderApiProducts(allProducts); 
+            Utils.showToast('Xóa sản phẩm thành công!', 'success'); 
+        } catch (error) { 
+            Utils.showToast(error.message || 'Không thể xóa sản phẩm!', 'error'); 
         }
-        .admin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-            gap: 1rem;
+    }
+}
+
+// =================================================================
+// MODAL MANAGER
+// =================================================================
+
+class ModalManager {
+    static initAuthModal() {
+        const authModal = document.getElementById('authModal'); const loginButton = document.getElementById('loginButton'); if (!authModal || !loginButton) return;
+        const showModal = () => { authModal.style.display = 'flex'; setTimeout(() => authModal.classList.add('show'), 10); document.body.style.overflow = 'hidden'; };
+        const hideModal = () => { authModal.classList.remove('show'); setTimeout(() => { authModal.style.display = 'none'; document.body.style.overflow = ''; }, 300); };
+        loginButton.addEventListener('click', showModal); authModal.querySelectorAll('.modal-close').forEach(btn => btn.addEventListener('click', hideModal)); authModal.addEventListener('click', (e) => { if (e.target === authModal) hideModal(); });
+        this.setupAuthTabs(authModal); this.setupAuthForms(authModal, hideModal);
+    }
+    static setupAuthTabs(authModal) {
+        const tabs = authModal.querySelectorAll('.modal-tab'); const forms = authModal.querySelectorAll('.modal-form');
+        tabs.forEach(tab => { tab.addEventListener('click', () => { tabs.forEach(t => t.classList.remove('active')); tab.classList.add('active'); forms.forEach(f => f.classList.toggle('active', f.id === `${tab.dataset.tab}Form`)); }); });
+        authModal.querySelectorAll('.switch-to-register, .switch-to-login').forEach(link => { link.addEventListener('click', (e) => { e.preventDefault(); const targetTab = e.target.classList.contains('switch-to-register') ? 'register' : 'login'; authModal.querySelector(`.modal-tab[data-tab="${targetTab}"]`)?.click(); }); });
+    }
+    static setupAuthForms(authModal, hideModal) { this.setupLoginForm(authModal.querySelector('#loginForm'), hideModal); this.setupRegisterForm(authModal.querySelector('#registerForm'), hideModal); }
+    static setupLoginForm(form, onSuccess) {
+        if (!form) return; form.addEventListener('submit', async (e) => {
+            e.preventDefault(); const submitBtn = form.querySelector('.btn-submit'); const spinner = submitBtn.querySelector('.spinner'); this.setLoadingState(submitBtn, spinner, true);
+            try { const email = form.email.value.trim(); const password = form.password.value; if (!email || !password) throw new Error('Vui lòng nhập đủ thông tin!'); const user = await AuthManager.login(email, password); Utils.showToast(`Chào mừng ${AuthManager.getDisplayName(user)}!`, 'success'); onSuccess(); form.reset(); setTimeout(() => ProductManager.loadProducts(), 500); }
+            catch (error) { Utils.showToast(error.message || 'Đăng nhập thất bại!', 'error'); } finally { this.setLoadingState(submitBtn, spinner, false); }
+        });
+    }
+    static setupRegisterForm(form, onSuccess) {
+        if (!form) return; form.addEventListener('submit', async (e) => {
+            e.preventDefault(); const submitBtn = form.querySelector('.btn-submit'); const spinner = submitBtn.querySelector('.spinner'); this.setLoadingState(submitBtn, spinner, true);
+            try { const name = form.name.value.trim(); const email = form.email.value.trim(); const password = form.password.value; const confirmPassword = form.confirmPassword.value; if (!name || !email || !password || !confirmPassword) throw new Error('Vui lòng nhập đủ thông tin!'); if (password.length < 6) throw new Error('Mật khẩu ít nhất 6 ký tự!'); if (password !== confirmPassword) throw new Error('Mật khẩu không khớp!'); const user = await AuthManager.register(name, email, password, confirmPassword); Utils.showToast(`Chào mừng ${AuthManager.getDisplayName(user)}!`, 'success'); onSuccess(); form.reset(); setTimeout(() => ProductManager.loadProducts(), 500); }
+            catch (error) { Utils.showToast(error.message || 'Đăng ký thất bại!', 'error'); } finally { this.setLoadingState(submitBtn, spinner, false); }
+        });
+    }
+    static setLoadingState(submitBtn, spinner, isLoading) { if (isLoading) { submitBtn.classList.add('loading'); if (spinner) spinner.style.display = 'inline-block'; submitBtn.disabled = true; } else { submitBtn.classList.remove('loading'); if (spinner) spinner.style.display = 'none'; submitBtn.disabled = false; } }
+}
+
+// =================================================================
+// INITIALIZATION
+// =================================================================
+
+class App {
+    static async init() {
+        Utils.getToastContainer();
+        ModalManager.initAuthModal();
+        document.querySelectorAll('#logoutButton, #sidebarLogoutBtn').forEach(btn => { if (btn) btn.addEventListener('click', AuthManager.logout); });
+        await AuthManager.checkAutoLogin();
+        await App.initCurrentPage();
+        setTimeout(() => FloatingButtonsManager.init(), 500);
+    }
+    static async initCurrentPage() {
+        const path = window.location.pathname.split("/").pop() || 'index.html';
+        switch (path) {
+            case 'index.html': case '': await App.initIndexPage(); break;
+            // No specific init needed for these pages as main.js handles auth check
+            // case 'account.html':
+            // case 'cart.html':
+            // case 'favorite.html':
+            // case 'admin.html':
+            // break;
         }
-        #pageTitle { font-size: 2.25rem; margin: 0; font-weight: 700; }
-        #menuToggle {
-            display: none;
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--secondary-color);
-        }
+    }
+    static async initIndexPage() {
+        await ProductManager.loadProducts();
+        const filterButton = document.getElementById('filterButton'); const resetButton = document.getElementById('resetButton');
+        if (filterButton) filterButton.addEventListener('click', () => window.filterProducts?.());
+        if (resetButton) resetButton.addEventListener('click', () => window.resetFilters?.());
+    }
+}
 
-        .content-section { display: none; }
-        .content-section.active { display: block; animation: fadeIn 0.5s; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes zoomIn { to { opacity: 1; transform: scale(1); } }
+// =================================================================
+// GLOBAL EXPORTS
+// =================================================================
 
-        /* --- Dashboard Specifics --- */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 1.5rem;
-            margin-top: 1.5rem;
-        }
-        .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; }
-        .card { background: white; padding: 1.5rem; border-radius: var(--border-radius); box-shadow: var(--shadow-md); transition: transform 0.2s, box-shadow 0.2s; }
-        .card:hover { transform: translateY(-5px); box-shadow: var(--shadow-lg); }
-        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
-        .card-header h3 { margin: 0; color: var(--gray-color); font-size: 1rem; font-weight: 600; }
-        .card-icon { font-size: 1.5rem; color: var(--primary-color); background: #eef2ff; padding: 0.75rem; border-radius: 50%; }
-        .card .value { font-size: 2rem; font-weight: 700; }
-        .card .sub-value { font-size: 0.9rem; color: var(--gray-color); margin-top: 5px; }
+window.Utils = Utils; window.CartManager = CartManager; window.FavoriteManager = FavoriteManager;
+window.PermissionManager = PermissionManager; window.ProductManager = ProductManager; window.StorageManager = StorageManager;
+window.ApiManager = ApiManager;
+window.AuthManager = AuthManager; // Export AuthManager
 
-        .activity-feed, .chart-container, #broadcast-form-container { background: white; padding: 1.5rem; border-radius: var(--border-radius); box-shadow: var(--shadow-md); }
-        .activity-feed h3, .chart-container h3, #broadcast-form-container h3 { margin-bottom: 1rem; }
-        .activity-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border-color); }
-        .activity-item:last-child { border-bottom: none; }
-        .activity-icon { font-size: 1.2rem; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
-        .activity-icon.user { background: #dcfce7; color: #16a34a; }
-        .activity-icon.product { background: #e0e7ff; color: #4338ca; }
-        .activity-text { flex-grow: 1; font-size: 0.9rem; }
-        .activity-time { font-size: 0.8rem; color: var(--gray-color); white-space: nowrap; }
-        
-        /* --- Tables --- */
-        .table-container { background: white; border-radius: var(--border-radius); box-shadow: var(--shadow-md); overflow-x: auto; }
-        .table-header { padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color); }
-        .table-header input { padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; width: 300px; transition: var(--transition); }
-        .table-header input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); outline: none; }
-        
-        table { width: 100%; border-collapse: collapse; min-width: 800px; }
-        th, td { padding: 1rem 1.5rem; text-align: left; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
-        thead { background: #f9fafb; }
-        thead th { font-weight: 600; color: var(--gray-color); cursor: pointer; user-select: none; white-space: nowrap; }
-        thead th:hover .sort-icon { opacity: 1; }
-        thead th .sort-icon { margin-left: 0.5rem; opacity: 0.5; transition: opacity 0.2s; }
-        tbody tr:last-child td { border-bottom: none; }
-        tbody tr:hover { background: #f3f4f6; }
-        .product-image-thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; }
-        
-        .actions button { background: none; border: none; cursor: pointer; padding: 5px; font-size: 1rem; margin: 0 5px; transition: color 0.2s, transform 0.2s; }
-        .actions button:hover { transform: scale(1.2); }
-        .actions button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-        .btn-edit { color: var(--primary-color); }
-        .btn-delete { color: var(--danger-color); }
-        .btn-promote { color: var(--success-color); }
-        .btn-ban { color: var(--warning-color); }
-        .role-badge { padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
-        .role-badge.admin { background: #fee2e2; color: var(--danger-color); }
-        .role-badge.user { background: #e0f2fe; color: #0284c7; }
-        
-        .table-footer { padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
-        .pagination { display: flex; gap: 0.5rem; align-items: center; }
-        .pagination button { padding: 0.5rem 1rem; border: 1px solid var(--border-color); background: white; border-radius: 6px; cursor: pointer; transition: var(--transition); }
-        .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .pagination button:hover:not(:disabled) { background: var(--light-color); border-color: var(--primary-color); color: var(--primary-color); }
-        
-        .loading-state, .empty-state { text-align: center; padding: 3rem; color: var(--gray-color); }
-        .spinner { width: 40px; height: 40px; border: 4px solid var(--border-color); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; margin: auto; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+window.updateAllFavoriteButtons = async () => {
+    if (!currentUser) return; try { const favorites = await FavoriteManager.get(); favorites.forEach(fav => FavoriteManager.updateStatus(fav.product?._id || fav.productId, true)); } catch {}
+};
 
-        /* --- Generic Button --- */
-        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 600; text-decoration: none; cursor: pointer; font-size: 14px; background-color: var(--primary-color); color: white; transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s; }
-        .btn:hover { background-color: #4338ca; transform: translateY(-2px); box-shadow: var(--shadow-md); }
-        .btn i { font-size: 1rem; }
+// =================================================================
+// APPLICATION START
+// =================================================================
 
-        /* --- Modal --- */
-        .modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(17, 24, 39, 0.6); backdrop-filter: blur(4px);
-            z-index: 101; justify-content: center; align-items: start; animation: fadeIn 0.3s; padding: 2rem 0;
-        }
-        .modal-content {
-            background: white; padding: 2.5rem; border-radius: var(--border-radius); width: 95%; max-width: 800px;
-            max-height: calc(100vh - 4rem); overflow-y: auto; box-shadow: var(--shadow-lg);
-            opacity: 0; transform: scale(0.95); animation: zoomIn 0.3s forwards;
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); }
-        .modal-header h2 { margin: 0; font-size: 1.5rem; }
-        #close-modal-btn { background: none; border: none; font-size: 1.75rem; cursor: pointer; color: var(--gray-color); transition: color 0.2s, transform 0.2s; }
-        #close-modal-btn:hover { color: var(--secondary-color); transform: rotate(90deg); }
-
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
-        .form-group { display: flex; flex-direction: column; }
-        .form-group.full-width { grid-column: 1 / -1; }
-        .form-group label { margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
-        .form-group input, .form-group textarea, .form-group select {
-            padding: 0.875rem 1rem; border: 1px solid var(--border-color); border-radius: 8px;
-            font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; background-color: white; font-family: inherit;
-        }
-        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
-            outline: none; border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
-        }
-        .form-group textarea { min-height: 120px; resize: vertical; }
-
-        .image-preview { display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; background-color: #f3f4f6; padding: 1rem; border-radius: 8px; min-height: 120px; border: 1px dashed var(--border-color); }
-        .image-preview img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 2px solid white; box-shadow: var(--shadow-sm); }
-        .modal-footer { margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
-        
-        /* --- Responsive --- */
-        @media (max-width: 992px) {
-            .admin-sidebar { transform: translateX(-100%); box-shadow: var(--shadow-lg); }
-            .admin-sidebar.open { transform: translateX(0); }
-            .admin-main { margin-left: 0; width: 100%; }
-            #menuToggle { display: block; }
-        }
-        @media (max-width: 768px) {
-            .admin-main { padding: 1.5rem; }
-            .admin-header h1 { font-size: 1.75rem; }
-            .table-header { flex-direction: column; gap: 1rem; align-items: stretch; }
-            .table-header input { width: 100%; }
-            .dashboard-grid { grid-template-columns: 1fr; }
-            .stat-cards { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 480px) {
-            .stat-cards { grid-template-columns: 1fr; }
-            .table-footer { flex-direction: column; gap: 1rem; }
-        }
-    </style>
-</head>
-<body>
-    <!-- Login Section -->
-    <div id="admin-login-container">
-        <div class="login-box">
-            <img src="https://i.ibb.co/q3r1hTft/8574d186247eba75669b7d50d42bd650-png.png" alt="Logo" class="login-logo">
-            <h2>Admin Panel Login</h2>
-            <p>Vui lòng đăng nhập để tiếp tục</p>
-            <form id="admin-login-form">
-                <div class="input-group">
-                    <i class="fas fa-envelope"></i>
-                    <input type="email" id="admin-email" placeholder="Email" required>
-                </div>
-                <div class="input-group">
-                    <i class="fas fa-lock"></i>
-                    <input type="password" id="admin-password" placeholder="Mật khẩu" required>
-                </div>
-                <button type="submit" class="btn-login">Đăng nhập</button>
-                <p id="login-error-message" class="error-message"></p>
-            </form>
-            <a href="index.html" class="back-to-shop">← Quay lại trang chủ</a>
-        </div>
-    </div>
-
-    <!-- Main Admin Panel (Initially hidden) -->
-    <aside class="admin-sidebar" id="adminSidebar" style="display: none;">
-        <div class="sidebar-header">
-            <img src="https://i.ibb.co/q3r1hTft/8574d186247eba75669b7d50d42bd650-png.png" alt="Logo" class="logo">
-            <h3>Admin Panel</h3>
-        </div>
-        <nav class="admin-nav">
-            <div class="nav-item active" data-tab="dashboard-tab"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></div>
-            <div class="nav-item" data-tab="products-tab"><i class="fas fa-box-open"></i><span>Sản phẩm</span></div>
-            <div class="nav-item" data-tab="users-tab"><i class="fas fa-users"></i><span>Người dùng</span></div>
-            <div class="nav-item" data-tab="broadcast-tab"><i class="fas fa-bullhorn"></i><span>Thông báo</span></div>
-        </nav>
-        <div class="sidebar-footer">
-            <p>Xin chào, <strong id="adminName">Admin</strong></p>
-            <a href="#" id="adminLogout">Đăng xuất <i class="fas fa-sign-out-alt"></i></a>
-        </div>
-    </aside>
-
-    <main class="admin-main" id="adminMain" style="display: none;">
-        <header class="admin-header">
-            <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
-            <h1 id="pageTitle">Dashboard</h1>
-        </header>
-
-        <!-- Dashboard Section -->
-        <section id="dashboard-tab" class="content-section active">
-            <div class="stat-cards">
-                <div class="card">
-                    <div class="card-header"><h3>Tổng Sản Phẩm</h3><i class="fas fa-boxes card-icon"></i></div>
-                    <div class="value" id="total-products">0</div>
-                </div>
-                 <div class="card">
-                    <div class="card-header"><h3>Doanh Thu</h3><i class="fas fa-dollar-sign card-icon" style="color: var(--success-color); background: #dcfce7;"></i></div>
-                    <div class="value" id="total-revenue">0đ</div>
-                </div>
-                <div class="card">
-                    <div class="card-header"><h3>Bán Chạy</h3><i class="fas fa-fire card-icon" style="color: var(--danger-color); background: #fee2e2;"></i></div>
-                    <div class="value" id="top-seller" style="font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">N/A</div>
-                    <div class="sub-value" id="top-seller-sales">0 lượt mua</div>
-                </div>
-                <div class="card">
-                    <div class="card-header"><h3>Người Dùng</h3><i class="fas fa-users card-icon" style="color: var(--warning-color); background: #fef9c3;"></i></div>
-                    <div class="value" id="total-users">0</div>
-                </div>
-            </div>
-            <div class="dashboard-grid">
-                <div class="activity-feed">
-                    <h3>Hoạt Động Gần Đây</h3>
-                    <div id="activity-feed-content">
-                        <div class="empty-state" style="padding: 1rem 0;"><p>Chưa có hoạt động nào.</p></div>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <h3>Biểu Đồ Doanh Thu (Sắp ra mắt)</h3>
-                    <div class="empty-state" style="padding: 1rem 0;">
-                        <i class="fas fa-chart-line fa-3x" style="opacity: 0.5;"></i>
-                        <p>Dữ liệu biểu đồ sẽ sớm được tích hợp.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Products Section -->
-        <section id="products-tab" class="content-section">
-            <div class="table-container">
-                <div class="table-header">
-                    <input type="text" id="productSearchInput" placeholder="🔍 Tìm kiếm sản phẩm...">
-                    <button class="btn" id="addProductBtn"><i class="fas fa-plus"></i> Thêm Sản Phẩm</button>
-                </div>
-                <table id="products-table">
-                    <thead>
-                        <tr>
-                            <th>Hình ảnh</th>
-                            <th data-sort="title">Tên sản phẩm <i class="fas fa-sort sort-icon"></i></th>
-                            <th data-sort="price">Giá <i class="fas fa-sort sort-icon"></i></th>
-                            <th data-sort="stock">Kho <i class="fas fa-sort sort-icon"></i></th>
-                            <th data-sort="sales">Đã bán <i class="fas fa-sort sort-icon"></i></th>
-                            <th>Hành động</th>
-                        </tr>
-                    </thead>
-                    <tbody id="products-table-body"></tbody>
-                </table>
-                <div class="table-footer">
-                    <span id="product-page-info"></span>
-                    <div class="pagination" id="product-pagination"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Users Section -->
-        <section id="users-tab" class="content-section">
-             <div class="table-container">
-                <div class="table-header">
-                    <input type="text" id="userSearchInput" placeholder="🔍 Tìm kiếm người dùng theo tên hoặc email...">
-                </div>
-                <table id="users-table">
-                    <thead>
-                        <tr>
-                            <th data-sort="name">Tên người dùng <i class="fas fa-sort sort-icon"></i></th>
-                            <th data-sort="email">Email <i class="fas fa-sort sort-icon"></i></th>
-                            <th data-sort="role">Vai trò <i class="fas fa-sort sort-icon"></i></th>
-                            <th data-sort="createdAt">Ngày đăng ký <i class="fas fa-sort sort-icon"></i></th>
-                            <th>Hành động</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body"></tbody>
-                </table>
-                <div class="table-footer">
-                    <span id="user-page-info"></span>
-                    <div class="pagination" id="user-pagination"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Broadcast Section -->
-        <section id="broadcast-tab" class="content-section">
-            <div id="broadcast-form-container">
-                <h3>Gửi Thông Báo Toàn Web</h3>
-                <p class="sub-value" style="margin-bottom: 1.5rem;">Thông báo sẽ được gửi tới tất cả người dùng đang truy cập trang web thông qua WebSocket.</p>
-                <form id="broadcastForm">
-                    <div class="form-group full-width">
-                        <label for="broadcastMessage">Nội dung thông báo</label>
-                        <textarea id="broadcastMessage" required placeholder="Nhập thông báo..."></textarea>
-                    </div>
-                    <button type="submit" class="btn" disabled><i class="fas fa-paper-plane"></i> Gửi Thông Báo</button>
-                </form>
-            </div>
-        </section>
-    </main>
-
-    <!-- Product Add/Edit Modal -->
-    <div id="product-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-title">Thêm Sản Phẩm Mới</h2>
-                <button id="close-modal-btn" class="close-button">×</button>
-            </div>
-            <form id="product-form" novalidate>
-                <input type="hidden" id="productId">
-                <div class="form-grid">
-                    <div class="form-group"><label for="title">Tên sản phẩm *</label><input type="text" id="title" required></div>
-                    <div class="form-group"><label for="category">Danh mục</label><input type="text" id="category" placeholder="e.g., Thú cưng, Giống cây..."></div>
-                    <div class="form-group"><label for="price">Giá bán (VNĐ) *</label><input type="number" id="price" required min="0"></div>
-                    <div class="form-group"><label for="oldPrice">Giá cũ (VNĐ)</label><input type="number" id="oldPrice" min="0"></div>
-                    <div class="form-group"><label for="stock">Số lượng kho *</label><input type="number" id="stock" required min="0" value="99"></div>
-                    <div class="form-group"><label for="badge">Nhãn (Hot, Sale...)</label><input type="text" id="badge" placeholder="e.g., Hot, Sale"></div>
-                    <div class="form-group full-width"><label for="description">Mô tả ngắn</label><textarea id="description"></textarea></div>
-                    <div class="form-group full-width"><label for="detailedDescription">Mô tả chi tiết</label><textarea id="detailedDescription"></textarea></div>
-                    <div class="form-group full-width">
-                        <label for="images">Link hình ảnh (cách nhau bằng dấu phẩy hoặc xuống dòng)</label>
-                        <textarea id="images" placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"></textarea>
-                        <div class="image-preview" id="image-preview"></div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn" id="cancel-btn" style="background-color: var(--gray-color);">Hủy</button>
-                    <button type="submit" class="btn" id="save-product-btn">Lưu Sản Phẩm</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Toast Container - Sử dụng từ main.js -->
-    <div id="toastContainer"></div>
-
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="main.js"></script>
-    <script src="admin.js"></script>
-</body>
-</html>
+document.addEventListener('DOMContentLoaded', () => {
+    App.init();
+});
