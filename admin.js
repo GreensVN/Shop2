@@ -1,4 +1,4 @@
-"use strict";
+ "use strict";
 
 /**
  * AdminPanel - Quản lý giao diện admin (FIXED VERSION)
@@ -165,10 +165,15 @@ const AdminPanel = {
             this.checkAuthAndToggleView();
         });
 
-        // Login form
+        // Login form - Sửa để tránh form reset
         const loginForm = document.getElementById('admin-login-form');
         if (loginForm) {
-            loginForm.addEventListener('submit', (e) => this.handleAdminLogin(e));
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.handleAdminLogin(e);
+                return false;
+            });
         }
 
         // Admin logout
@@ -295,12 +300,13 @@ const AdminPanel = {
 
     async handleAdminLogin(e) {
         e.preventDefault();
+        e.stopPropagation(); // Ngăn event bubbling
         console.log('handleAdminLogin called');
         
         const emailInput = document.getElementById('admin-email');
         const passwordInput = document.getElementById('admin-password');
         const errorMessage = document.getElementById('login-error-message');
-        const submitBtn = e.target.querySelector('.btn-login');
+        const submitBtn = document.querySelector('#admin-login-form .btn-login');
 
         if (!emailInput || !passwordInput || !submitBtn) {
             console.error('Missing form elements');
@@ -381,9 +387,11 @@ const AdminPanel = {
             // Show success message
             this.showToast('Đăng nhập admin thành công!', 'success');
             
-            // Clear form
-            emailInput.value = '';
-            passwordInput.value = '';
+            // Clear form AFTER successful login
+            setTimeout(() => {
+                emailInput.value = '';
+                passwordInput.value = '';
+            }, 100);
             
             // Update UI
             this.checkAuthAndToggleView();
@@ -418,6 +426,11 @@ const AdminPanel = {
             }
             
             errorMessage.textContent = errorMsg;
+            
+            // Focus vào input đầu tiên khi có lỗi
+            setTimeout(() => {
+                if (emailInput) emailInput.focus();
+            }, 100);
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Đăng nhập';
