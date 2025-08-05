@@ -118,8 +118,8 @@ class StorageManager {
 // =================================================================
 
 class PermissionManager {
-    static checkPostPermission() { if (!currentUser?.email) return false; const userEmail = currentUser.email.toLowerCase().trim(); return CONFIG.AUTHORIZED_EMAILS.map(email => email.toLowerCase()).includes(userEmail); }
-    static checkDeletePermission(product) { if (!currentUser) return false; if (this.checkPostPermission()) return true; return product.createdBy === currentUser._id; }
+    static checkPostPermission() { if (!currentUser?.email) return false; const userEmail = currentUser.email.toLowerCase().trim(); return CONFIG.AUTHORIZED_EMAILS.map(email => email.toLowerCase()).includes(userEmail) || currentUser.role === 'admin'; }
+    static checkDeletePermission(product) { if (!currentUser) return false; if (this.checkPostPermission() || currentUser.role === 'admin') return true; return product.createdBy === currentUser._id; }
 }
 
 // =================================================================
@@ -180,13 +180,13 @@ class FloatingButtonsManager {
 const CartManager = {
     async get() { if (!currentUser) return []; try { const result = await ApiManager.call('/cart'); return result.data.cart || []; } catch { return []; } },
     async add(productId, quantity = 1) { if (!currentUser) throw new Error('Vui lòng đăng nhập!'); await ApiManager.call('/cart', 'POST', { productId, quantity }); await this.updateCount(); },
-    async updateCount() { if (!currentUser) return; const cart = await this.get(); const count = cart.reduce((sum, item) => sum + (item.quantity || 0), 0); document.querySelectorAll('.cart-count, #cartCount').forEach(el => { el.textContent = count; el.style.display = count > 0 ? 'inline-flex' : 'none'; }); }
+    async updateCount() { if (!currentUser) return; try { const cart = await this.get(); const count = cart.reduce((sum, item) => sum + (item.quantity || 0), 0); document.querySelectorAll('.cart-count, #cartCount').forEach(el => { el.textContent = count; el.style.display = count > 0 ? 'inline-flex' : 'none'; }); } catch { /* fail silently */ } }
 };
 const FavoriteManager = {
     async get() { if (!currentUser) return []; try { const result = await ApiManager.call('/favorites'); return result.data.favorites || []; } catch { return []; } },
     async add(productId) { if (!currentUser) throw new Error('Vui lòng đăng nhập!'); await ApiManager.call('/favorites', 'POST', { productId }); await this.updateStatus(productId, true); },
     async remove(productId) { if (!currentUser) return; await ApiManager.call(`/favorites/${productId}`, 'DELETE'); await this.updateStatus(productId, false); },
-    async updateStatus(productId, isFavorite) { document.querySelectorAll(`.favorite-btn[data-id="${productId}"]`).forEach(btn => { btn.classList.toggle('active', isFavorite); const icon = btn.querySelector('i'); if (icon) icon.className = isFavorite ? 'fas fa-heart' : 'far fa-heart'; }); }
+    async updateStatus(productId, isFavorite) { document.querySelectorAll(`.btn-favorite[data-id="${productId}"], .favorite-btn[data-id="${productId}"]`).forEach(btn => { btn.classList.toggle('active', isFavorite); const icon = btn.querySelector('i'); if (icon) icon.className = isFavorite ? 'fas fa-heart' : 'far fa-heart'; }); }
 };
 
 // =================================================================
@@ -200,7 +200,7 @@ class AuthManager {
         if (!confirm('Bạn có chắc chắn muốn đăng xuất?')) return;
         localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN); localStorage.removeItem(CONFIG.STORAGE_KEYS.USER); currentUser = null;
         AuthManager.updateUIAfterLogout(); Utils.showToast('Đăng xuất thành công!', 'success');
-        const protectedPages = ['account.html', 'cart.html', 'favorite.html']; if (protectedPages.some(page => window.location.pathname.includes(page))) { setTimeout(() => window.location.href = 'index.html', 1000); }
+        const protectedPages = ['account.html', 'cart.html', 'favorite.html', 'admin.html']; if (protectedPages.some(page => window.location.pathname.includes(page))) { setTimeout(() => window.location.href = 'index.html', 1000); }
     }
     static async checkAutoLogin() {
         const token = localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN);
@@ -225,12 +225,20 @@ class AuthManager {
         document.querySelectorAll('.user-name, #userName').forEach(el => { if (el) el.textContent = displayName; });
         document.querySelectorAll('.user-avatar, #userAvatar').forEach(el => { if (el) el.textContent = firstLetter; });
         await CartManager.updateCount(); FloatingButtonsManager.update();
+        // <<< FIX START >>>
+        // Thông báo cho toàn bộ ứng dụng rằng trạng thái đăng nhập đã thay đổi
+        document.dispatchEvent(new CustomEvent('authChange', { detail: { user: currentUser } }));
+        // <<< FIX END >>>
     }
     static updateUIAfterLogout() {
         const loginButton = document.getElementById('loginButton'); const userDropdown = document.getElementById('userDropdown');
         if (loginButton) loginButton.style.display = 'flex'; if (userDropdown) userDropdown.style.display = 'none';
         document.querySelectorAll('.cart-count, #cartCount').forEach(el => { el.textContent = '0'; el.style.display = 'none'; });
         FloatingButtonsManager.update();
+        // <<< FIX START >>>
+        // Thông báo cho toàn bộ ứng dụng rằng trạng thái đăng nhập đã thay đổi
+        document.dispatchEvent(new CustomEvent('authChange', { detail: { user: null } }));
+        // <<< FIX END >>>
     }
 }
 
@@ -251,19 +259,40 @@ class ProductManager {
         } catch (error) {
             const localProducts = StorageManager.loadProducts();
             if (localProducts.length > 0) { allProducts = localProducts; if (window.renderApiProducts) { window.renderApiProducts(localProducts); } Utils.showToast('Hiển thị sản phẩm offline.', 'warning'); }
-            else { productsGrid.innerHTML = `<div class="auth-required-message" style="grid-column: 1/-1; text-align: center; padding: 60px 20px;"><i class="fas fa-lock" style="font-size: 3rem; color: #6366f1; margin-bottom: 1rem;"></i><h3 style="color: #1f2937; margin-bottom: 1rem;">Cần đăng nhập để xem sản phẩm</h3><p style="color: #64748b; margin-bottom: 2rem;">Vui lòng đăng nhập để truy cập danh sách sản phẩm</p><button class="btn btn-primary" onclick="document.getElementById('loginButton').click()"><i class="fas fa-user"></i> <span>Đăng nhập ngay</span></button></div>`; }
+            else { Utils.showError(productsGrid, 'Không thể tải sản phẩm. Vui lòng thử lại.'); }
         }
     }
     static async createProduct(productData) {
-        const product = { _id: Utils.generateId(), title: Utils.sanitizeInput(productData.title), description: Utils.sanitizeInput(productData.description), price: parseInt(productData.price), images: [productData.image], badge: productData.badge || null, sales: parseInt(productData.sales) || 0, stock: 999, category: 'custom', link: productData.link, createdAt: new Date().toISOString(), createdBy: currentUser?._id };
-        try { const apiData = { ...product }; delete apiData._id; await ApiManager.createProduct(apiData); Utils.showToast('Đăng sản phẩm thành công!', 'success'); await ProductManager.loadProducts(); return true; }
-        catch (error) { if (StorageManager.addProduct(product)) { allProducts.unshift(product); if (window.renderApiProducts) { window.renderApiProducts(allProducts); } Utils.showToast('Đăng sản phẩm thành công! (Lưu cục bộ)', 'info'); return true; } }
+        const product = { _id: Utils.generateId(), createdBy: currentUser?._id, ...productData };
+        try { 
+            await ApiManager.createProduct(product); 
+            Utils.showToast('Đăng sản phẩm thành công!', 'success'); 
+            await this.loadProducts(); 
+            return true; 
+        } catch (error) { 
+            if (StorageManager.addProduct(product)) { 
+                allProducts.unshift(product); 
+                if (window.renderApiProducts) window.renderApiProducts(allProducts); 
+                Utils.showToast('Đăng sản phẩm thành công! (Lưu cục bộ)', 'info'); 
+                return true; 
+            }
+        }
         throw new Error('Không thể lưu sản phẩm');
     }
     static async deleteProduct(productId) {
         if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return;
-        try { if (productId.startsWith('local_')) { StorageManager.deleteProduct(productId); } else { await ApiManager.deleteProduct(productId); } allProducts = allProducts.filter(p => p._id !== productId); if (window.renderApiProducts) { window.renderApiProducts(allProducts); } Utils.showToast('Xóa sản phẩm thành công!', 'success'); }
-        catch (error) { Utils.showToast(error.message || 'Không thể xóa sản phẩm!', 'error'); }
+        try { 
+            if (productId.startsWith('local_')) { 
+                StorageManager.deleteProduct(productId); 
+            } else { 
+                await ApiManager.deleteProduct(productId); 
+            } 
+            allProducts = allProducts.filter(p => p._id !== productId); 
+            if (window.renderApiProducts) window.renderApiProducts(allProducts); 
+            Utils.showToast('Xóa sản phẩm thành công!', 'success'); 
+        } catch (error) { 
+            Utils.showToast(error.message || 'Không thể xóa sản phẩm!', 'error'); 
+        }
     }
 }
 
@@ -319,9 +348,12 @@ class App {
         const path = window.location.pathname.split("/").pop() || 'index.html';
         switch (path) {
             case 'index.html': case '': await App.initIndexPage(); break;
-            case 'account.html': await App.initAccountPage(); break;
-            case 'cart.html': await App.initCartPage(); break;
-            case 'favorite.html': await App.initFavoritePage(); break;
+            // No specific init needed for these pages as main.js handles auth check
+            // case 'account.html':
+            // case 'cart.html':
+            // case 'favorite.html':
+            // case 'admin.html':
+            // break;
         }
     }
     static async initIndexPage() {
@@ -330,9 +362,6 @@ class App {
         if (filterButton) filterButton.addEventListener('click', () => window.filterProducts?.());
         if (resetButton) resetButton.addEventListener('click', () => window.resetFilters?.());
     }
-    static async initAccountPage() { if (!currentUser) setTimeout(() => window.location.href = 'index.html', 1000); }
-    static async initCartPage() { if (!currentUser) setTimeout(() => window.location.href = 'index.html', 1000); }
-    static async initFavoritePage() { if (!currentUser) setTimeout(() => window.location.href = 'index.html', 1000); }
 }
 
 // =================================================================
@@ -342,9 +371,10 @@ class App {
 window.Utils = Utils; window.CartManager = CartManager; window.FavoriteManager = FavoriteManager;
 window.PermissionManager = PermissionManager; window.ProductManager = ProductManager; window.StorageManager = StorageManager;
 window.ApiManager = ApiManager;
+window.AuthManager = AuthManager; // Export AuthManager
 
 window.updateAllFavoriteButtons = async () => {
-    if (!currentUser) return; try { const favorites = await FavoriteManager.get(); favorites.forEach(fav => FavoriteManager.updateStatus(fav.productId, true)); } catch {}
+    if (!currentUser) return; try { const favorites = await FavoriteManager.get(); favorites.forEach(fav => FavoriteManager.updateStatus(fav.product?._id || fav.productId, true)); } catch {}
 };
 
 // =================================================================
