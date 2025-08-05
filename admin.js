@@ -128,6 +128,15 @@ const AdminPanel = {
             loginForm.addEventListener('submit', (e) => this.handleAdminLogin(e));
         }
 
+        // Admin logout
+        const adminLogout = document.getElementById('adminLogout');
+        if (adminLogout) {
+            adminLogout.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.handleAdminLogout();
+            });
+        }
+
         // Navigation tabs
         document.querySelectorAll('.admin-nav .nav-item').forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -228,16 +237,7 @@ const AdminPanel = {
             usersTableBody.addEventListener('click', (e) => this.handleTableActions(e, 'user'));
         }
 
-        // Logout
-        const adminLogout = document.getElementById('adminLogout');
-        if (adminLogout) {
-            adminLogout.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (window.AuthManager?.logout) {
-                    window.AuthManager.logout();
-                }
-            });
-        }
+        // Logout handled in bindEvents above
     },
 
     debounce(func, wait) {
@@ -268,6 +268,13 @@ const AdminPanel = {
             return;
         }
 
+        // Check if AuthManager is available
+        if (!window.AuthManager) {
+            console.error('AuthManager not available');
+            errorMessage.textContent = 'Hệ thống đăng nhập chưa sẵn sàng. Vui lòng thử lại.';
+            return;
+        }
+
         // Validation
         if (!emailInput.value.trim()) {
             errorMessage.textContent = 'Vui lòng nhập email.';
@@ -286,9 +293,30 @@ const AdminPanel = {
         submitBtn.textContent = 'Đang đăng nhập...';
 
         try {
-            console.log('Calling AuthManager.login...');
-            await window.AuthManager.login(emailInput.value, passwordInput.value);
-            console.log('Login successful');
+            console.log('Calling custom admin login...');
+            
+            // Custom admin login without triggering UI updates
+            const data = await this.apiCall('/users/login', 'POST', { 
+                email: emailInput.value, 
+                password: passwordInput.value 
+            });
+            
+            // Store user data
+            localStorage.setItem(CONFIG.STORAGE_KEYS.TOKEN, data.token);
+            this.currentUser = { ...data.data.user, email: data.data.user.email || emailInput.value };
+            localStorage.setItem(CONFIG.STORAGE_KEYS.USER, JSON.stringify(this.currentUser));
+            
+            // Update global currentUser for compatibility
+            window.currentUser = this.currentUser;
+            
+            console.log('Admin login successful:', this.currentUser);
+            
+            // Show success message
+            this.showToast('Đăng nhập admin thành công!', 'success');
+            
+            // Update UI without triggering reload
+            this.checkAuthAndToggleView();
+            
         } catch (error) {
             console.error('Login error:', error);
             errorMessage.textContent = error?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
@@ -296,6 +324,24 @@ const AdminPanel = {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Đăng nhập';
         }
+    },
+
+    handleAdminLogout() {
+        if (!confirm('Bạn có chắc chắn muốn đăng xuất?')) return;
+        
+        // Clear storage
+        localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN);
+        localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
+        
+        // Clear user data
+        this.currentUser = null;
+        window.currentUser = null;
+        
+        // Show logout message
+        this.showToast('Đăng xuất thành công!', 'success');
+        
+        // Update UI
+        this.checkAuthAndToggleView();
     },
 
     async fetchInitialData() {
@@ -1074,4 +1120,10 @@ const AdminPanel = {
 };
 
 // Initialize AdminPanel
-AdminPanel.init();
+try {
+    console.log('Initializing AdminPanel...');
+    AdminPanel.init();
+    console.log('AdminPanel initialized successfully');
+} catch (error) {
+    console.error('Error initializing AdminPanel:', error);
+}
