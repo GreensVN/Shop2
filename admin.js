@@ -15,21 +15,22 @@ const AdminPanel = {
     itemsPerPage: 7,
 
     // Sorting State
-    productSort: { column: 'title', order: 'asc' },
-    userSort: { column: 'name', order: 'asc' },
+    productSort: { column: 'createdAt', order: 'desc' },
+    userSort: { column: 'createdAt', order: 'desc' },
 
     // --- INITIALIZATION ---
     init() {
-        document.addEventListener('DOMContentLoaded', async () => {
-            // main.js đã chạy checkAutoLogin, nên window.currentUser đã được cập nhật
-            this.currentUser = window.currentUser;
-            this.bindEvents(); // Gắn các sự kiện, bao gồm cả form đăng nhập
-            this.checkAuthAndToggleView(); // Kiểm tra quyền và hiển thị giao diện phù hợp
+        document.addEventListener('DOMContentLoaded', () => {
+            // Gắn các sự kiện ngay lập tức
+            this.bindEvents(); 
+            // Kiểm tra quyền ban đầu (có thể currentUser chưa có sẵn)
+            this.checkAuthAndToggleView(); 
         });
     },
 
     checkAuthAndToggleView() {
-        this.currentUser = window.currentUser; // Luôn lấy đối tượng người dùng mới nhất
+        // Luôn lấy đối tượng người dùng mới nhất từ global scope của main.js
+        this.currentUser = window.currentUser; 
 
         if (this.currentUser && this.currentUser.role === 'admin') {
             // Người dùng là admin, hiển thị panel
@@ -37,7 +38,8 @@ const AdminPanel = {
             document.getElementById('adminSidebar').style.display = 'flex';
             document.getElementById('adminMain').style.display = 'block';
             
-            this.setupPanel(); // Hàm mới để khởi tạo dữ liệu cho panel
+            // Chỉ khởi tạo panel nếu chưa được khởi tạo
+            this.setupPanel(); 
         } else {
             // Người dùng không phải admin hoặc chưa đăng nhập, hiển thị form đăng nhập
             document.getElementById('admin-login-container').style.display = 'flex';
@@ -46,12 +48,15 @@ const AdminPanel = {
             
             if (this.currentUser) { // Đã đăng nhập nhưng không phải admin
                 document.getElementById('login-error-message').textContent = 'Truy cập bị từ chối. Yêu cầu quyền Admin.';
+            } else {
+                document.getElementById('login-error-message').textContent = '';
             }
         }
     },
     
     setupPanel() {
-        if (this.isInitialized) return; // Không khởi tạo lại nếu đã làm rồi
+        // Không khởi tạo lại nếu đã làm rồi
+        if (this.isInitialized) return; 
 
         document.getElementById('adminName').textContent = this.currentUser.name || 'Admin';
         this.fetchInitialData();
@@ -61,8 +66,17 @@ const AdminPanel = {
     },
 
     bindEvents() {
+        // <<< FIX START >>>
+        // Lắng nghe sự kiện thay đổi trạng thái đăng nhập từ main.js
+        document.addEventListener('authChange', (event) => {
+            this.currentUser = event.detail.user; // Cập nhật người dùng từ sự kiện
+            this.checkAuthAndToggleView(); // Kiểm tra lại giao diện
+        });
+        // <<< FIX END >>>
+
         // Form đăng nhập
-        document.getElementById('admin-login-form').addEventListener('submit', (e) => this.handleAdminLogin(e));
+        const loginForm = document.getElementById('admin-login-form');
+        if (loginForm) loginForm.addEventListener('submit', (e) => this.handleAdminLogin(e));
 
         // Tab navigation
         document.querySelectorAll('.admin-nav .nav-item').forEach(tab => {
@@ -105,10 +119,9 @@ const AdminPanel = {
         // Logout
         document.getElementById('adminLogout').addEventListener('click', (e) => {
             e.preventDefault();
+            // Sử dụng AuthManager đã được export từ main.js
             if (window.AuthManager) {
                 AuthManager.logout();
-                this.isInitialized = false; // Reset flag khi đăng xuất
-                this.checkAuthAndToggleView(); // Hiển thị lại màn hình đăng nhập
             }
         });
     },
@@ -118,18 +131,16 @@ const AdminPanel = {
         const email = document.getElementById('admin-email').value;
         const password = document.getElementById('admin-password').value;
         const errorMessage = document.getElementById('login-error-message');
-        const submitBtn = document.querySelector('.btn-login');
+        const submitBtn = e.target.querySelector('.btn-login');
 
         errorMessage.textContent = '';
         submitBtn.disabled = true;
         submitBtn.textContent = 'Đang đăng nhập...';
 
         try {
-            // Sử dụng AuthManager từ main.js
-            await AuthManager.login(email, password);
-            
-            // Sau khi đăng nhập thành công, kiểm tra lại quyền
-            this.checkAuthAndToggleView();
+            // Sử dụng AuthManager từ main.js, nó sẽ tự động cập nhật window.currentUser
+            // và phát sự kiện 'authChange' mà chúng ta đã lắng nghe ở trên.
+            await window.AuthManager.login(email, password);
 
         } catch (error) {
             errorMessage.textContent = error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
@@ -241,8 +252,14 @@ const AdminPanel = {
         
         // Sort data
         const sortedData = [...data].sort((a, b) => {
-            const valA = a[sortState.column] || '';
-            const valB = b[sortState.column] || '';
+            let valA = a[sortState.column] || (sortState.column === 'createdAt' ? 0 : '');
+            let valB = b[sortState.column] || (sortState.column === 'createdAt' ? 0 : '');
+            
+            if (sortState.column === 'createdAt') {
+                valA = new Date(valA).getTime();
+                valB = new Date(valB).getTime();
+            }
+
             if (typeof valA === 'string') {
                  return sortState.order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
             }
@@ -324,7 +341,16 @@ const AdminPanel = {
     },
     
     changePage(type, direction) {
-        const totalPages = Math.ceil(this[type+'s'].length / this.itemsPerPage);
+        const totalItems = this[`${type}s`].filter(item => {
+            const searchInput = document.getElementById(`${type}SearchInput`);
+            if (!searchInput || !searchInput.value) return true;
+            const searchTerm = searchInput.value.toLowerCase();
+            if (type === 'product') return item.title.toLowerCase().includes(searchTerm);
+            if (type === 'user') return item.name.toLowerCase().includes(searchTerm) || item.email.toLowerCase().includes(searchTerm);
+            return true;
+        }).length;
+
+        const totalPages = Math.ceil(totalItems / this.itemsPerPage);
         this[`${type}CurrentPage`] += direction;
         
         if (this[`${type}CurrentPage`] < 1) this[`${type}CurrentPage`] = 1;
@@ -477,7 +503,7 @@ const AdminPanel = {
                 const input = document.getElementById(key);
                 if (input) {
                     if (key === 'images') {
-                        const imageUrls = product.images.join(',\n');
+                        const imageUrls = (product.images || []).join(',\n');
                         input.value = imageUrls;
                         this.updateImagePreview(imageUrls);
                     } else {
@@ -485,6 +511,9 @@ const AdminPanel = {
                     }
                 }
             });
+            // Handle potentially missing fields in the form
+            document.getElementById('detailedDescription').value = product.detailedDescription || '';
+            document.getElementById('oldPrice').value = product.oldPrice || '';
         } else {
             document.getElementById('modal-title').textContent = 'Thêm Sản Phẩm Mới';
         }
@@ -501,10 +530,12 @@ const AdminPanel = {
         if (!urls) return;
         const urlArray = urls.split(/[, \n]+/).map(url => url.trim()).filter(url => url);
         urlArray.forEach(url => {
-            const img = document.createElement('img');
-            img.src = url;
-            img.onerror = () => { img.style.display = 'none'; };
-            previewContainer.appendChild(img);
+            if (Utils.validateURL(url)) {
+                const img = document.createElement('img');
+                img.src = url;
+                img.onerror = () => { img.style.display = 'none'; };
+                previewContainer.appendChild(img);
+            }
         });
     },
 
@@ -547,6 +578,7 @@ const AdminPanel = {
     // --- UTILITIES ---
     moment(dateString) {
         // Simple moment.js 'fromNow' alternative
+        if (!dateString) return 'không xác định';
         const diff = new Date() - new Date(dateString);
         const seconds = Math.floor(diff / 1000);
         if (seconds < 2) return "vài giây trước";
