@@ -114,12 +114,14 @@
         .btn-login:disabled {
             background-color: var(--gray-color);
             cursor: not-allowed;
+            transform: none !important;
         }
         .error-message {
             color: var(--danger-color);
             margin-top: 1rem;
             font-size: 0.9rem;
             height: 1.2rem; /* Reserve space to prevent layout shift */
+            min-height: 1.2rem;
         }
         .back-to-shop {
             display: inline-block;
@@ -131,6 +133,19 @@
         .back-to-shop:hover {
             color: var(--primary-color);
             text-decoration: underline;
+        }
+        
+        /* Prevent form reset issues */
+        #admin-login-form {
+            position: relative;
+        }
+        #admin-login-form:focus-within {
+            outline: none;
+        }
+        #admin-login-form input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
         }
 
         /* --- Sidebar --- */
@@ -341,14 +356,14 @@
             <img src="https://i.ibb.co/q3r1hTft/8574d186247eba75669b7d50d42bd650-png.png" alt="Logo" class="login-logo">
             <h2>Admin Panel Login</h2>
             <p>Vui lòng đăng nhập để tiếp tục</p>
-            <form id="admin-login-form">
+            <form id="admin-login-form" novalidate>
                 <div class="input-group">
                     <i class="fas fa-envelope"></i>
-                    <input type="email" id="admin-email" placeholder="Email" required>
+                    <input type="email" id="admin-email" placeholder="Email" required autocomplete="email">
                 </div>
                 <div class="input-group">
                     <i class="fas fa-lock"></i>
-                    <input type="password" id="admin-password" placeholder="Mật khẩu" required>
+                    <input type="password" id="admin-password" placeholder="Mật khẩu" required autocomplete="current-password">
                 </div>
                 <button type="submit" class="btn-login">Đăng nhập</button>
                 <p id="login-error-message" class="error-message"></p>
