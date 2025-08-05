@@ -7,6 +7,7 @@ const AdminPanel = {
     activity: [],
     currentUser: null,
     socket: null,
+    isInitialized: false, // Flag để tránh khởi tạo lại
     
     // Pagination State
     productCurrentPage: 1,
@@ -20,28 +21,49 @@ const AdminPanel = {
     // --- INITIALIZATION ---
     init() {
         document.addEventListener('DOMContentLoaded', async () => {
-            // Lấy thông tin người dùng từ main.js hoặc localStorage
-            this.currentUser = window.currentUser || JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.USER));
-            if (!this.checkAuth()) return;
-
-            this.bindEvents();
-            await this.fetchInitialData();
-            this.setupWebSocket();
-            this.navigateToTab('dashboard-tab'); // Bắt đầu ở trang dashboard
+            // main.js đã chạy checkAutoLogin, nên window.currentUser đã được cập nhật
+            this.currentUser = window.currentUser;
+            this.bindEvents(); // Gắn các sự kiện, bao gồm cả form đăng nhập
+            this.checkAuthAndToggleView(); // Kiểm tra quyền và hiển thị giao diện phù hợp
         });
     },
 
-    checkAuth() {
-        if (!this.currentUser || this.currentUser.role !== 'admin') {
-            alert('Truy cập bị từ chối! Yêu cầu quyền Admin.');
-            window.location.href = 'index.html';
-            return false;
+    checkAuthAndToggleView() {
+        this.currentUser = window.currentUser; // Luôn lấy đối tượng người dùng mới nhất
+
+        if (this.currentUser && this.currentUser.role === 'admin') {
+            // Người dùng là admin, hiển thị panel
+            document.getElementById('admin-login-container').style.display = 'none';
+            document.getElementById('adminSidebar').style.display = 'flex';
+            document.getElementById('adminMain').style.display = 'block';
+            
+            this.setupPanel(); // Hàm mới để khởi tạo dữ liệu cho panel
+        } else {
+            // Người dùng không phải admin hoặc chưa đăng nhập, hiển thị form đăng nhập
+            document.getElementById('admin-login-container').style.display = 'flex';
+            document.getElementById('adminSidebar').style.display = 'none';
+            document.getElementById('adminMain').style.display = 'none';
+            
+            if (this.currentUser) { // Đã đăng nhập nhưng không phải admin
+                document.getElementById('login-error-message').textContent = 'Truy cập bị từ chối. Yêu cầu quyền Admin.';
+            }
         }
+    },
+    
+    setupPanel() {
+        if (this.isInitialized) return; // Không khởi tạo lại nếu đã làm rồi
+
         document.getElementById('adminName').textContent = this.currentUser.name || 'Admin';
-        return true;
+        this.fetchInitialData();
+        this.setupWebSocket();
+        this.navigateToTab('dashboard-tab');
+        this.isInitialized = true;
     },
 
     bindEvents() {
+        // Form đăng nhập
+        document.getElementById('admin-login-form').addEventListener('submit', (e) => this.handleAdminLogin(e));
+
         // Tab navigation
         document.querySelectorAll('.admin-nav .nav-item').forEach(tab => {
             tab.addEventListener('click', (e) => this.navigateToTab(e.currentTarget.dataset.tab));
@@ -68,7 +90,7 @@ const AdminPanel = {
         // Image preview
         document.getElementById('images').addEventListener('input', (e) => this.updateImagePreview(e.target.value));
 
-        // Table search (sử dụng 'input' để tìm kiếm tức thì)
+        // Table search
         document.getElementById('productSearchInput').addEventListener('input', (e) => this.filterAndRenderProducts(e.target.value));
         document.getElementById('userSearchInput').addEventListener('input', (e) => this.filterAndRenderUsers(e.target.value));
 
@@ -83,14 +105,38 @@ const AdminPanel = {
         // Logout
         document.getElementById('adminLogout').addEventListener('click', (e) => {
             e.preventDefault();
-            // Gọi hàm logout từ main.js để đảm bảo đồng bộ
             if (window.AuthManager) {
-                window.AuthManager.logout();
-            } else {
-                localStorage.clear();
-                window.location.href = 'index.html';
+                AuthManager.logout();
+                this.isInitialized = false; // Reset flag khi đăng xuất
+                this.checkAuthAndToggleView(); // Hiển thị lại màn hình đăng nhập
             }
         });
+    },
+
+    async handleAdminLogin(e) {
+        e.preventDefault();
+        const email = document.getElementById('admin-email').value;
+        const password = document.getElementById('admin-password').value;
+        const errorMessage = document.getElementById('login-error-message');
+        const submitBtn = document.querySelector('.btn-login');
+
+        errorMessage.textContent = '';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Đang đăng nhập...';
+
+        try {
+            // Sử dụng AuthManager từ main.js
+            await AuthManager.login(email, password);
+            
+            // Sau khi đăng nhập thành công, kiểm tra lại quyền
+            this.checkAuthAndToggleView();
+
+        } catch (error) {
+            errorMessage.textContent = error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Đăng nhập';
+        }
     },
     
     // --- DATA FETCHING & RENDERING ---
