@@ -14,9 +14,9 @@ const CONFIG = {
         'greensvn@gmail.com'
     ],
     STORAGE_KEYS: {
-        TOKEN: 'token',
-        USER: 'currentUser',
-        PRODUCTS: 'localProducts'
+        TOKEN: 'gag_token',
+        USER: 'gag_user',
+        PRODUCTS: 'gag_products'
     },
     TOAST_DURATION: 3000,
     ANIMATION_DELAY: 0.08
