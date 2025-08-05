@@ -1,14 +1,14 @@
 "use strict";
 
 /**
- * AdminPanel - Quản lý giao diện admin
- * Tương thích với admin.html và được tối ưu hóa cho hiệu suất
+ * AdminPanel - Quản lý giao diện admin (FIXED VERSION)
+ * Đã sửa tất cả bug đăng nhập và tương thích hoàn toàn
  */
 
 // Backend Configuration
 const CONFIG = {
     API_BASE_URL: 'https://shop-4mlk.onrender.com/api/v1',
-    SOCKET_URL: 'https://shop-4mlk.onrender.com/api/v1',
+    SOCKET_URL: 'https://shop-4mlk.onrender.com',
     AUTHORIZED_EMAILS: [
         'chinhan20917976549a@gmail.com',
         'ryantran149@gmail.com',
@@ -22,7 +22,7 @@ const CONFIG = {
     },
     TOAST_DURATION: 3000,
     ANIMATION_DELAY: 0.08,
-    MAX_IMAGE_SIZE: 5 * 1024 * 1024, // 5MB
+    MAX_IMAGE_SIZE: 5 * 1024 * 1024,
     ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
     PRODUCT_VALIDATION: {
         TITLE_MIN: 5,
@@ -80,7 +80,9 @@ const AdminPanel = {
     checkAuthAndToggleView() {
         // Get current user from localStorage or global
         const storedUser = localStorage.getItem(CONFIG.STORAGE_KEYS.USER);
-        if (storedUser) {
+        const storedToken = localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN);
+        
+        if (storedUser && storedToken) {
             try {
                 this.currentUser = JSON.parse(storedUser);
                 window.currentUser = this.currentUser;
@@ -88,6 +90,9 @@ const AdminPanel = {
                 console.error('Error parsing stored user:', e);
                 this.currentUser = null;
                 window.currentUser = null;
+                // Clear corrupted data
+                localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
+                localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN);
             }
         } else {
             this.currentUser = window.currentUser || null;
@@ -101,8 +106,15 @@ const AdminPanel = {
         // Check if user is admin
         const isAdmin = this.currentUser && (
             this.currentUser.role === 'admin' || 
-            CONFIG.AUTHORIZED_EMAILS.includes(this.currentUser.email)
+            CONFIG.AUTHORIZED_EMAILS.includes(this.currentUser.email?.toLowerCase()?.trim())
         );
+
+        console.log('Auth check:', { 
+            hasUser: !!this.currentUser, 
+            userEmail: this.currentUser?.email, 
+            userRole: this.currentUser?.role, 
+            isAdmin 
+        });
 
         if (isAdmin) {
             this.showElement(loginContainer, false);
@@ -136,7 +148,7 @@ const AdminPanel = {
 
         const adminName = document.getElementById('adminName');
         if (adminName && this.currentUser) {
-            adminName.textContent = this.currentUser.name || this.currentUser.email || 'Admin';
+            adminName.textContent = this.currentUser.name || this.currentUser.email?.split('@')[0] || 'Admin';
         }
 
         this.fetchInitialData();
@@ -146,8 +158,9 @@ const AdminPanel = {
     },
 
     bindEvents() {
-        // Auth change event
+        // Auth change event listener
         document.addEventListener('authChange', (event) => {
+            console.log('Admin received authChange event:', event.detail);
             this.currentUser = event.detail?.user;
             this.checkAuthAndToggleView();
         });
@@ -294,35 +307,57 @@ const AdminPanel = {
             return;
         }
 
-        // Validation
-        if (!emailInput.value.trim()) {
+        const email = emailInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        // Basic validation
+        if (!email) {
             errorMessage.textContent = 'Vui lòng nhập email.';
             return;
         }
 
-        if (!passwordInput.value.trim()) {
+        if (!password) {
             errorMessage.textContent = 'Vui lòng nhập mật khẩu.';
             return;
         }
 
-        console.log('Attempting login with:', { email: emailInput.value });
+        // Email format validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            errorMessage.textContent = 'Email không hợp lệ.';
+            return;
+        }
+
+        console.log('Attempting login with:', { email });
 
         errorMessage.textContent = '';
         submitBtn.disabled = true;
         submitBtn.textContent = 'Đang đăng nhập...';
 
         try {
-            console.log('Calling custom admin login...');
+            console.log('Calling admin login API...');
             
-            // Custom admin login without triggering UI updates
-            const data = await this.apiCall('/users/login', 'POST', { 
-                email: emailInput.value, 
-                password: passwordInput.value 
-            });
+            // Call login API
+            const loginData = await this.apiCall('/users/login', 'POST', { 
+                email: email, 
+                password: password 
+            }, false); // Don't require auth for login
             
-            // Store user data
-            localStorage.setItem(CONFIG.STORAGE_KEYS.TOKEN, data.token);
-            this.currentUser = { ...data.data.user, email: data.data.user.email || emailInput.value };
+            console.log('Login API response:', loginData);
+
+            if (!loginData.token || !loginData.data?.user) {
+                throw new Error('Phản hồi đăng nhập không hợp lệ');
+            }
+
+            // Store authentication data
+            localStorage.setItem(CONFIG.STORAGE_KEYS.TOKEN, loginData.token);
+            
+            // Create user object with proper email fallback
+            this.currentUser = {
+                ...loginData.data.user,
+                email: loginData.data.user.email || email
+            };
+            
             localStorage.setItem(CONFIG.STORAGE_KEYS.USER, JSON.stringify(this.currentUser));
             
             // Update global currentUser for compatibility
@@ -330,15 +365,59 @@ const AdminPanel = {
             
             console.log('Admin login successful:', this.currentUser);
             
+            // Check admin permissions
+            const isAdmin = this.currentUser.role === 'admin' || 
+                           CONFIG.AUTHORIZED_EMAILS.includes(this.currentUser.email?.toLowerCase()?.trim());
+            
+            if (!isAdmin) {
+                // Clear data if not admin
+                localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN);
+                localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
+                this.currentUser = null;
+                window.currentUser = null;
+                throw new Error('Bạn không có quyền truy cập Admin.');
+            }
+            
             // Show success message
             this.showToast('Đăng nhập admin thành công!', 'success');
             
-            // Update UI without triggering reload
+            // Clear form
+            emailInput.value = '';
+            passwordInput.value = '';
+            
+            // Update UI
             this.checkAuthAndToggleView();
+            
+            // Dispatch auth change event for other components
+            document.dispatchEvent(new CustomEvent('authChange', { 
+                detail: { user: this.currentUser } 
+            }));
             
         } catch (error) {
             console.error('Login error:', error);
-            errorMessage.textContent = error?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
+            
+            // Clear any stored data on error
+            localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN);
+            localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
+            this.currentUser = null;
+            window.currentUser = null;
+            
+            let errorMsg = 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.';
+            
+            if (error.message) {
+                if (error.message.includes('Invalid credentials') || 
+                    error.message.includes('Incorrect email or password')) {
+                    errorMsg = 'Email hoặc mật khẩu không đúng.';
+                } else if (error.message.includes('quyền truy cập')) {
+                    errorMsg = error.message;
+                } else if (error.message.includes('Network')) {
+                    errorMsg = 'Lỗi kết nối mạng. Vui lòng thử lại.';
+                } else {
+                    errorMsg = error.message;
+                }
+            }
+            
+            errorMessage.textContent = errorMsg;
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Đăng nhập';
@@ -361,6 +440,11 @@ const AdminPanel = {
         
         // Update UI
         this.checkAuthAndToggleView();
+        
+        // Dispatch auth change event
+        document.dispatchEvent(new CustomEvent('authChange', { 
+            detail: { user: null } 
+        }));
     },
 
     async fetchInitialData() {
@@ -371,17 +455,27 @@ const AdminPanel = {
         this.setLoadingState('users-table-body', 5);
 
         try {
+            console.log('Fetching initial data...');
+            
+            // Fetch products and users in parallel
             const [productsData, usersData] = await Promise.all([
                 this.apiCall('/products?limit=1000&sort=-createdAt', 'GET', null, false),
                 this.apiCall('/users', 'GET', null, true)
             ]);
+
+            console.log('Fetched data:', { 
+                products: productsData?.data?.products?.length || 0,
+                users: usersData?.data?.users?.length || 0
+            });
 
             this.products = productsData?.data?.products || [];
             this.users = usersData?.data?.users || [];
 
             this.generateActivityFeed();
             this.renderAll();
+            
         } catch (error) {
+            console.error('Error fetching initial data:', error);
             this.showToast('Không thể tải dữ liệu quản trị. ' + (error?.message || ''), 'error');
             this.setErrorState('products-table-body', 6, 'Lỗi tải sản phẩm');
             this.setErrorState('users-table-body', 5, 'Lỗi tải người dùng');
@@ -412,52 +506,85 @@ const AdminPanel = {
             options.body = JSON.stringify(data);
         }
 
-        const response = await fetch(url, options);
-        const responseData = await response.json();
+        console.log(`API Call: ${method} ${url}`, { requireAuth, hasData: !!data });
 
-        if (!response.ok) {
-            throw new Error(responseData.message || 'Lỗi kết nối server');
+        try {
+            const response = await fetch(url, options);
+            
+            // Handle different response types
+            let responseData;
+            const contentType = response.headers.get('content-type');
+            
+            if (response.status === 204) {
+                responseData = { success: true };
+            } else if (contentType && contentType.includes('application/json')) {
+                responseData = await response.json();
+            } else {
+                const text = await response.text();
+                responseData = { message: text || 'Unknown response' };
+            }
+
+            console.log(`API Response: ${response.status}`, responseData);
+
+            if (!response.ok) {
+                const errorMessage = responseData?.message || 
+                                   responseData?.error || 
+                                   `HTTP ${response.status}: ${response.statusText}`;
+                throw new Error(errorMessage);
+            }
+
+            return responseData;
+            
+        } catch (error) {
+            console.error(`API Error: ${method} ${url}`, error);
+            
+            // Network errors
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error('Lỗi kết nối mạng. Vui lòng kiểm tra internet.');
+            }
+            
+            // Re-throw the error with original message
+            throw error;
         }
-
-        return responseData;
     },
 
     showToast(message, type = 'info') {
         // Remove existing toasts
-        document.querySelectorAll('.toast').forEach(toast => toast.remove());
+        document.querySelectorAll('.admin-toast').forEach(toast => toast.remove());
 
         const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
+        toast.className = `admin-toast toast-${type}`;
         toast.textContent = message;
         toast.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
             padding: 12px 20px;
-            border-radius: 4px;
+            border-radius: 8px;
             color: white;
-            z-index: 10000;
+            z-index: 10001;
             font-size: 14px;
-            max-width: 300px;
+            max-width: 350px;
             word-wrap: break-word;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             transform: translateX(100%);
             transition: transform 0.3s ease;
+            font-family: inherit;
         `;
 
         switch (type) {
             case 'success':
-                toast.style.backgroundColor = '#28a745';
+                toast.style.backgroundColor = '#10b981';
                 break;
             case 'error':
-                toast.style.backgroundColor = '#dc3545';
+                toast.style.backgroundColor = '#ef4444';
                 break;
             case 'warning':
-                toast.style.backgroundColor = '#ffc107';
-                toast.style.color = '#212529';
+                toast.style.backgroundColor = '#f59e0b';
+                toast.style.color = '#1f2937';
                 break;
             default:
-                toast.style.backgroundColor = '#17a2b8';
+                toast.style.backgroundColor = '#3b82f6';
         }
 
         document.body.appendChild(toast);
@@ -493,6 +620,7 @@ const AdminPanel = {
     },
 
     sanitizeInput(input) {
+        if (!input) return '';
         const temp = document.createElement('div');
         temp.textContent = input;
         return temp.innerHTML;
@@ -614,7 +742,7 @@ const AdminPanel = {
             this.activity.push({
                 type: 'product',
                 text: `Sản phẩm "${product.title}" được thêm mới`,
-                time: product.createdAt
+                time: product.createdAt || new Date().toISOString()
             });
         });
 
@@ -623,7 +751,7 @@ const AdminPanel = {
             this.activity.push({
                 type: 'user',
                 text: `Người dùng "${user.name || user.email}" đã đăng ký`,
-                time: user.createdAt
+                time: user.createdAt || new Date().toISOString()
             });
         });
 
@@ -731,7 +859,7 @@ const AdminPanel = {
 
     renderProductRow(p) {
         return `
-            <tr>
+            <tr data-id="${p._id}">
                 <td>
                     <img src="${this.sanitizeInput((p.images && p.images[0]) || 'https://via.placeholder.com/50x50?text=No+Img')}" 
                          alt="${this.sanitizeInput(p.title)}" 
@@ -757,7 +885,7 @@ const AdminPanel = {
     renderUserRow(u) {
         const roleClass = u.role === 'admin' ? 'admin' : 'user';
         return `
-            <tr>
+            <tr data-id="${u._id}">
                 <td>${this.sanitizeInput(u.name || 'N/A')}</td>
                 <td>${this.sanitizeInput(u.email)}</td>
                 <td><span class="role-badge ${roleClass}">${u.role || 'user'}</span></td>
@@ -889,14 +1017,13 @@ const AdminPanel = {
                 badge: document.getElementById('badge').value.trim(),
                 description: document.getElementById('description').value.trim(),
                 detailedDescription: document.getElementById('detailedDescription').value.trim(),
-                images: document.getElementById('images').value.trim()
+                images: this.parseImageUrls(document.getElementById('images').value.trim())
             };
 
             // Validation
             const validationErrors = this.validateProductData(productData);
             if (validationErrors.length > 0) {
                 this.showToast(validationErrors.join('. '), 'error');
-                submitBtn.disabled = false;
                 return;
             }
 
@@ -916,6 +1043,14 @@ const AdminPanel = {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Lưu Sản Phẩm';
         }
+    },
+
+    parseImageUrls(urlString) {
+        if (!urlString) return [];
+        return urlString
+            .split(/[,\n]+/)
+            .map(url => url.trim())
+            .filter(url => url && this.validateURL(url));
     },
 
     handleEditProduct(id) {
@@ -1061,33 +1196,61 @@ const AdminPanel = {
         try {
             if (typeof io === 'undefined') {
                 console.warn("Thư viện Socket.IO không tìm thấy. Tính năng thông báo bị vô hiệu hóa.");
+                const broadcastBtn = document.querySelector('#broadcastForm button');
+                if (broadcastBtn) {
+                    broadcastBtn.disabled = true;
+                    broadcastBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Socket.IO không khả dụng';
+                }
                 return;
             }
             
             this.socket = io(CONFIG.SOCKET_URL, { 
-                transports: ['websocket'],
-                timeout: 5000
+                transports: ['websocket', 'polling'],
+                timeout: 10000,
+                forceNew: true
             });
 
             this.socket.on('connect', () => {
-                this.showToast('Hệ thống thông báo sẵn sàng!', 'info');
+                console.log('Socket connected successfully');
+                this.showToast('Hệ thống thông báo sẵn sàng!', 'success');
                 const broadcastBtn = document.querySelector('#broadcastForm button');
-                if (broadcastBtn) broadcastBtn.disabled = false;
+                if (broadcastBtn) {
+                    broadcastBtn.disabled = false;
+                    broadcastBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Gửi Thông Báo';
+                }
             });
 
             this.socket.on('connect_error', (err) => {
-                this.showToast('Không thể kết nối server thông báo!', 'error');
                 console.error('Socket connect_error:', err);
+                this.showToast('Không thể kết nối server thông báo!', 'warning');
                 const broadcastBtn = document.querySelector('#broadcastForm button');
-                if (broadcastBtn) broadcastBtn.disabled = true;
+                if (broadcastBtn) {
+                    broadcastBtn.disabled = true;
+                    broadcastBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Lỗi kết nối';
+                }
             });
 
-            this.socket.on('disconnect', () => {
+            this.socket.on('disconnect', (reason) => {
+                console.log('Socket disconnected:', reason);
                 const broadcastBtn = document.querySelector('#broadcastForm button');
-                if (broadcastBtn) broadcastBtn.disabled = true;
+                if (broadcastBtn) {
+                    broadcastBtn.disabled = true;
+                    broadcastBtn.innerHTML = '<i class="fas fa-plug"></i> Mất kết nối';
+                }
             });
+
+            this.socket.on('reconnect', () => {
+                console.log('Socket reconnected');
+                this.showToast('Đã kết nối lại hệ thống thông báo!', 'info');
+            });
+
         } catch (e) {
             console.error("Lỗi khởi tạo WebSocket:", e?.message);
+            const broadcastBtn = document.querySelector('#broadcastForm button');
+            if (broadcastBtn) {
+                broadcastBtn.disabled = true;
+                broadcastBtn.innerHTML = '<i class="fas fa-times"></i> Lỗi khởi tạo';
+            }
         }
     },
 
@@ -1100,39 +1263,72 @@ const AdminPanel = {
             this.showToast('Vui lòng nhập nội dung thông báo.', 'warning');
             return;
         }
+
+        if (message.length > 500) {
+            this.showToast('Nội dung thông báo không được quá 500 ký tự.', 'warning');
+            return;
+        }
         
-        if (message && this.socket?.connected) {
-            this.socket.emit('admin_broadcast', { message });
-            this.showToast('Đã gửi thông báo!', 'success');
-            if (messageInput) messageInput.value = '';
-        } else if (!this.socket?.connected) {
-            this.showToast('Chưa kết nối đến server thông báo.', 'error');
+        if (this.socket && this.socket.connected) {
+            try {
+                this.socket.emit('admin_broadcast', { 
+                    message: message,
+                    timestamp: new Date().toISOString(),
+                    from: this.currentUser?.email || 'Admin'
+                });
+                this.showToast('Đã gửi thông báo thành công!', 'success');
+                if (messageInput) messageInput.value = '';
+            } catch (error) {
+                console.error('Broadcast error:', error);
+                this.showToast('Lỗi gửi thông báo: ' + error.message, 'error');
+            }
+        } else {
+            this.showToast('Chưa kết nối đến server thông báo. Vui lòng thử lại.', 'error');
         }
     },
 
     moment(dateString) {
         if (!dateString) return 'không xác định';
         
-        const diff = new Date() - new Date(dateString);
-        if (isNaN(diff)) return 'không xác định';
-        
-        const seconds = Math.floor(diff / 1000);
-        if (seconds < 2) return "vài giây trước";
-        if (seconds < 60) return `${seconds} giây trước`;
-        
-        const minutes = Math.floor(seconds / 60);
-        if (minutes < 2) return "1 phút trước";
-        if (minutes < 60) return `${minutes} phút trước`;
-        
-        const hours = Math.floor(minutes / 60);
-        if (hours < 2) return "1 giờ trước";
-        if (hours < 24) return `${hours} giờ trước`;
-        
-        const days = Math.floor(hours / 24);
-        if (days < 2) return "1 ngày trước";
-        return `${days} ngày trước`;
+        try {
+            const diff = new Date() - new Date(dateString);
+            if (isNaN(diff)) return 'không xác định';
+            
+            const seconds = Math.floor(diff / 1000);
+            if (seconds < 2) return "vài giây trước";
+            if (seconds < 60) return `${seconds} giây trước`;
+            
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 2) return "1 phút trước";
+            if (minutes < 60) return `${minutes} phút trước`;
+            
+            const hours = Math.floor(minutes / 60);
+            if (hours < 2) return "1 giờ trước";
+            if (hours < 24) return `${hours} giờ trước`;
+            
+            const days = Math.floor(hours / 24);
+            if (days < 2) return "1 ngày trước";
+            if (days < 7) return `${days} ngày trước`;
+            
+            const weeks = Math.floor(days / 7);
+            if (weeks < 2) return "1 tuần trước";
+            if (weeks < 4) return `${weeks} tuần trước`;
+            
+            const months = Math.floor(days / 30);
+            if (months < 2) return "1 tháng trước";
+            if (months < 12) return `${months} tháng trước`;
+            
+            const years = Math.floor(days / 365);
+            return `${years} năm trước`;
+        } catch (error) {
+            console.error('Date parsing error:', error);
+            return 'không xác định';
+        }
     }
 };
+
+// Make AdminPanel available globally
+window.AdminPanel = AdminPanel;
 
 // Initialize AdminPanel
 try {
@@ -1141,4 +1337,13 @@ try {
     console.log('AdminPanel initialized successfully');
 } catch (error) {
     console.error('Error initializing AdminPanel:', error);
-} 
+    
+    // Fallback initialization
+    setTimeout(() => {
+        try {
+            AdminPanel.init();
+        } catch (retryError) {
+            console.error('AdminPanel retry initialization failed:', retryError);
+        }
+    }, 1000);
+}
