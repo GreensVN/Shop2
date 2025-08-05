@@ -121,7 +121,7 @@ const AdminPanel = {
             e.preventDefault();
             // Sử dụng AuthManager đã được export từ main.js
             if (window.AuthManager) {
-                AuthManager.logout();
+                window.AuthManager.logout();
             }
         });
     },
@@ -141,6 +141,8 @@ const AdminPanel = {
             // Sử dụng AuthManager từ main.js, nó sẽ tự động cập nhật window.currentUser
             // và phát sự kiện 'authChange' mà chúng ta đã lắng nghe ở trên.
             await window.AuthManager.login(email, password);
+            // Sau khi đăng nhập thành công, sự kiện 'authChange' sẽ được kích hoạt
+            // và hàm checkAuthAndToggleView sẽ tự động xử lý việc hiển thị panel.
 
         } catch (error) {
             errorMessage.textContent = error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
